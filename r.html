@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Payment Test</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .config-section {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .config-section h2 {
+            color: #2d3748;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-subscription {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-subscription:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-payg {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .btn-payg:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(245, 158, 11, 0.3);
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .log-section {
+            background: #1a202c;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-section h3 {
+            color: #e2e8f0;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .log-entry {
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .log-info {
+            background: #2d3748;
+            color: #63b3ed;
+        }
+
+        .log-success {
+            background: #22543d;
+            color: #68d391;
+        }
+
+        .log-error {
+            background: #742a2a;
+            color: #fc8181;
+        }
+
+        .log-warning {
+            background: #744210;
+            color: #f6ad55;
+        }
+
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+        }
+
+        .clear-logs {
+            background: #4a5568;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .tier-select {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .tier-option {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .tier-option:hover {
+            border-color: #667eea;
+        }
+
+        .tier-option.selected {
+            border-color: #667eea;
+            background: #f7fafc;
+        }
+
+        .tier-option input[type="radio"] {
+            display: none;
+        }
+
+        .tier-label {
+            font-weight: 600;
+            color: #2d3748;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .tier-price {
+            color: #667eea;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Razorpay Payment Tester</h1>
+        <p class="subtitle">Test your payment integration with live API calls</p>
+
+        <!-- API Configuration -->
+        <div class="config-section">
+            <h2>
+                <span class="icon">⚙️</span>
+                API Configuration
+            </h2>
+            <div class="input-group">
+                <label>API Base URL</label>
+                <input type="text" id="apiBaseUrl" value="http://localhost:3000" placeholder="http://localhost:3000">
+            </div>
+            <div class="input-group">
+                <label>Authorization Token</label>
+                <input type="text" id="authToken" placeholder="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            </div>
+        </div>
+
+        <!-- Subscription Plan Test -->
+        <div class="config-section">
+            <h2>
+                <span class="icon">💳</span>
+                Test Subscription Payment
+            </h2>
+            <div class="input-group">
+                <label>Select Plan Tier</label>
+                <div class="tier-select">
+                    <label class="tier-option selected">
+                        <input type="radio" name="tier" value="STARTER" checked>
+                        <span class="tier-label">STARTER</span>
+                        <span class="tier-price">₹999/month</span>
+                    </label>
+                    <label class="tier-option">
+                        <input type="radio" name="tier" value="PROFESSIONAL">
+                        <span class="tier-label">PROFESSIONAL</span>
+                        <span class="tier-price">₹1,999/month</span>
+                    </label>
+                    <label class="tier-option">
+                        <input type="radio" name="tier" value="ENTERPRISE">
+                        <span class="tier-label">ENTERPRISE</span>
+                        <span class="tier-price">₹4,999/month</span>
+                    </label>
+                </div>
+            </div>
+            <button class="btn-subscription" onclick="testSubscription()">
+                <span>Test Subscription Payment</span>
+            </button>
+        </div>
+
+        <!-- Pay as You Go Test -->
+        <div class="config-section">
+            <h2>
+                <span class="icon">⚡</span>
+                Test Pay-as-You-Go
+            </h2>
+            <div class="input-group">
+                <label>Number of Leads</label>
+                <input type="number" id="leadsCount" value="10" min="1" placeholder="Enter number of leads">
+            </div>
+            <button class="btn-payg" onclick="testPayAsYouGo()">
+                <span>Test PAYG Payment</span>
+            </button>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="btn-group">
+            <button class="btn-subscription" onclick="fetchPlans()">
+                <span>📋 Fetch Plans</span>
+            </button>
+            <button class="btn-subscription" onclick="getCurrentSubscription()">
+                <span>👤 Get Current Subscription</span>
+            </button>
+        </div>
+
+        <!-- Console Log -->
+        <div class="log-section">
+            <h3>📝 Console Logs</h3>
+            <div id="logContainer"></div>
+            <button class="clear-logs" onclick="clearLogs()">Clear Logs</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize tier selection
+        document.querySelectorAll('.tier-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.tier-option').forEach(opt => opt.classList.remove('selected'));
+                this.classList.add('selected');
+                this.querySelector('input[type="radio"]').checked = true;
+            });
+        });
+
+        // Logging functions
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = '';
+            log('Logs cleared', 'info');
+        }
+
+        // Get API config
+        function getApiConfig() {
+            const baseUrl = document.getElementById('apiBaseUrl').value.trim();
+            const token = document.getElementById('authToken').value.trim();
+            
+            if (!baseUrl) {
+                log('Please enter API Base URL', 'error');
+                throw new Error('API Base URL is required');
+            }
+            
+            if (!token) {
+                log('Please enter Authorization Token', 'error');
+                throw new Error('Authorization Token is required');
+            }
+            
+            return { baseUrl, token };
+        }
+
+        // API Call Helper
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            try {
+                const { baseUrl, token } = getApiConfig();
+                const url = `${baseUrl}${endpoint}`;
+                
+                log(`📤 ${method} ${url}`, 'info');
+                if (body) {
+                    log(`📦 Request Body: ${JSON.stringify(body, null, 2)}`, 'info');
+                }
+
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    }
+                };
+
+                if (body && method !== 'GET') {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(url, options);
+                const data = await response.json();
+
+                if (response.ok) {
+                    log(`✅ Success: ${response.status}`, 'success');
+                    log(`📥 Response: ${JSON.stringify(data, null, 2)}`, 'success');
+                    return data;
+                } else {
+                    log(`❌ Error: ${response.status} - ${data.message || 'Unknown error'}`, 'error');
+                    throw new Error(data.message || 'API call failed');
+                }
+            } catch (error) {
+                log(`❌ Network Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Fetch Plans
+        async function fetchPlans() {
+            try {
+                log('Fetching subscription plans...', 'info');
+                const response = await apiCall('/companies/subscription/plans', 'GET');
+                alert('Plans fetched successfully! Check console logs for details.');
+            } catch (error) {
+                alert('Failed to fetch plans: ' + error.message);
+            }
+        }
+
+        // Get Current Subscription
+        async function getCurrentSubscription() {
+            try {
+                log('Fetching current subscription...', 'info');
+                const response = await apiCall('/companies/subscription/current', 'GET');
+                alert('Current subscription fetched! Check console logs for details.');
+            } catch (error) {
+                alert('Failed to fetch subscription: ' + error.message);
+            }
+        }
+
+        // Test Subscription Payment
+        async function testSubscription() {
+            try {
+                const tier = document.querySelector('input[name="tier"]:checked').value;
+                log(`🎯 Testing subscription payment for tier: ${tier}`, 'info');
+
+                // Step 1: Create Order
+                log('Step 1: Creating order...', 'info');
+                const orderResponse = await apiCall('/companies/subscription/create-order', 'POST', { tier });
+                
+                const { orderId, amount, currency, razorpayKeyId, planDetails } = orderResponse.data;
+                
+                log(`💰 Amount: ₹${amount / 100}`, 'info');
+                log(`📋 Order ID: ${orderId}`, 'info');
+
+                // Step 2: Open Razorpay Checkout
+                log('Step 2: Opening Razorpay checkout...', 'info');
+                
+                const options = {
+                    key: razorpayKeyId,
+                    amount: amount,
+                    currency: currency,
+                    name: 'Test Company',
+                    description: `${tier} Subscription`,
+                    order_id: orderId,
+                    handler: async function (response) {
+                        log('✅ Payment successful!', 'success');
+                        log(`Payment ID: ${response.razorpay_payment_id}`, 'success');
+                        log(`Order ID: ${response.razorpay_order_id}`, 'success');
+                        log(`Signature: ${response.razorpay_signature}`, 'success');
+
+                        // Step 3: Verify Payment
+                        try {
+                            log('Step 3: Verifying payment...', 'info');
+                            const verifyResponse = await apiCall('/companies/subscription/verify-payment', 'POST', {
+                                razorpayOrderId: response.razorpay_order_id,
+                                razorpayPaymentId: response.razorpay_payment_id,
+                                razorpaySignature: response.razorpay_signature
+                            });
+                            
+                            log('🎉 Payment verified successfully!', 'success');
+                            alert('✅ Subscription activated successfully!\n\nCheck console logs for full details.');
+                        } catch (error) {
+                            log('❌ Payment verification failed', 'error');
+                            alert('Payment completed but verification failed: ' + error.message);
+                        }
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            log('⚠️ Payment cancelled by user', 'warning');
+                            alert('Payment cancelled');
+                        }
+                    },
+                    theme: {
+                        color: '#667eea'
+                    }
+                };
+
+                const rzp = new Razorpay(options);
+                
+                rzp.on('payment.failed', function (response) {
+                    log('❌ Payment failed', 'error');
+                    log(`Error: ${response.error.description}`, 'error');
+                    alert('Payment failed: ' + response.error.description);
+                });
+
+                rzp.open();
+
+            } catch (error) {
+                alert('Failed to initiate payment: ' + error.message);
+            }
+        }
+
+        // Test Pay-as-You-Go
+        async function testPayAsYouGo() {
+            try {
+                const leadsCount = parseInt(document.getElementById('leadsCount').value);
+                
+                if (!leadsCount || leadsCount < 1) {
+                    alert('Please enter a valid number of leads');
+                    return;
+                }
+
+                log(`🎯 Testing PAYG payment for ${leadsCount} leads`, 'info');
+
+                // Step 1: Create Order
+                log('Step 1: Creating PAYG order...', 'info');
+                const orderResponse = await apiCall('/companies/pay-as-you-go/create-order', 'POST', { leadsCount });
+                
+                const { orderId, amount, currency, razorpayKeyId, leadsCount: purchasedLeads, pricePerLead } = orderResponse.data;
+                
+                log(`💰 Amount: ₹${amount / 100} (${purchasedLeads} leads @ ₹${pricePerLead})`, 'info');
+                log(`📋 Order ID: ${orderId}`, 'info');
+
+                // Step 2: Open Razorpay Checkout
+                log('Step 2: Opening Razorpay checkout...', 'info');
+                
+                const options = {
+                    key: razorpayKeyId,
+                    amount: amount,
+                    currency: currency,
+                    name: 'Test Company',
+                    description: `Purchase ${purchasedLeads} Leads`,
+                    order_id: orderId,
+                    handler: async function (response) {
+                        log('✅ Payment successful!', 'success');
+                        log(`Payment ID: ${response.razorpay_payment_id}`, 'success');
+                        log(`Order ID: ${response.razorpay_order_id}`, 'success');
+
+                        // Step 3: Verify Payment
+                        try {
+                            log('Step 3: Verifying payment...', 'info');
+                            const verifyResponse = await apiCall('/companies/pay-as-you-go/verify-payment', 'POST', {
+                                razorpayOrderId: response.razorpay_order_id,
+                                razorpayPaymentId: response.razorpay_payment_id,
+                                razorpaySignature: response.razorpay_signature
+                            });
+                            
+                            log('🎉 Payment verified and leads added!', 'success');
+                            log(`New Lead Quota: ${verifyResponse.data.leadQuota}`, 'success');
+                            alert(`✅ Leads added successfully!\n\nNew quota: ${verifyResponse.data.leadQuota}\nConsumed: ${verifyResponse.data.consumedLeads}`);
+                        } catch (error) {
+                            log('❌ Payment verification failed', 'error');
+                            alert('Payment completed but verification failed: ' + error.message);
+                        }
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            log('⚠️ Payment cancelled by user', 'warning');
+                            alert('Payment cancelled');
+                        }
+                    },
+                    theme: {
+                        color: '#f59e0b'
+                    }
+                };
+
+                const rzp = new Razorpay(options);
+                
+                rzp.on('payment.failed', function (response) {
+                    log('❌ Payment failed', 'error');
+                    log(`Error: ${response.error.description}`, 'error');
+                    alert('Payment failed: ' + response.error.description);
+                });
+
+                rzp.open();
+
+            } catch (error) {
+                alert('Failed to initiate payment: ' + error.message);
+            }
+        }
+
+        // Initialize
+        log('🚀 Razorpay Payment Tester initialized', 'success');
+        log('⚠️ Make sure your API server is running', 'warning');
+    </script>
+</body>
+</html>
