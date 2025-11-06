@@ -7,6 +7,7 @@
 │   ├── search/              # ⭐ Search section
 │   │   ├── _layout.js       # ⭐ Search layout
 │   │   └── index.js         # → /search
+│   │   └── [companyId].tsx  # → /particular company
 │   ├── Lead/              # ⭐ Lead section
 │   │   ├── _layout.js       # ⭐ Lead layout
 │   │   └── index.js         # → /lead

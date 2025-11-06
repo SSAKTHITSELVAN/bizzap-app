@@ -1,6 +1,7 @@
+
 // app/(app)/dashboard/_layout.tsx
 
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Platform, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Bell } from 'lucide-react-native';
@@ -14,7 +15,8 @@ const sizeScale = (size: number): number => (SCREEN_WIDTH / STANDARD_WIDTH) * si
 
 // --- Custom Header Component ---
 function CustomHeader() {
-    const router = useRouter(); 
+    const router = useRouter();
+    const pathname = usePathname();
     const [userProfile, setUserProfile] = useState<{
         userPhoto?: string;
         logo?: string;
@@ -23,6 +25,9 @@ function CustomHeader() {
     } | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // Hide header on notifications page
+    const isNotificationsPage = pathname?.includes('/notifications');
+    
     useEffect(() => {
         fetchUserProfile();
     }, []);
@@ -42,6 +47,11 @@ function CustomHeader() {
             setLoading(false);
         }
     };
+
+    // Don't render header on notifications page
+    if (isNotificationsPage) {
+        return null;
+    }
 
     // Determine which image to display (prioritize userPhoto, fallback to logo)
     const displayImage = userProfile?.userPhoto || userProfile?.logo;
@@ -64,10 +74,7 @@ function CustomHeader() {
 
                             <TouchableOpacity 
                                 style={styles.headerIcon}
-                                onPress={() => {
-                                    // Add notification functionality here
-                                    console.log('Notifications pressed');
-                                }}
+                                onPress={() => router.push('/(app)/dashboard/notifications')}
                             >
                                 <Bell size={sizeScale(24)} color="#fff" strokeWidth={2} />
                             </TouchableOpacity>
@@ -138,6 +145,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#fff',
         letterSpacing: sizeScale(0.5),
+        fontFamily: 'Nunito',
     },
     headerRight: {
         flexDirection: 'row',
