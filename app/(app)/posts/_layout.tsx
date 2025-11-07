@@ -2,7 +2,7 @@
 
 import { Stack } from 'expo-router';
 
-// Simple stack layout without header - header will be managed in index.tsx
+// Simple stack layout - header is managed by individual screen components
 export default function PostsLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }} />

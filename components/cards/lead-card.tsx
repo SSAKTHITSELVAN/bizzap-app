@@ -1,6 +1,6 @@
-// components/cards/lead-card.tsx - UPDATED WITH AUTO MESSAGE
+// components/cards/lead-card.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,20 @@ interface LeadCardProps {
   onConsumeSuccess?: (contact: string) => void;
 }
 
+interface ConsumedLead {
+  id: string;
+  companyId: string;
+  leadId: string;
+  consumedAt: string;
+  lead: {
+    company: {
+      id: string;
+      phoneNumber: string;
+      companyName: string;
+    };
+  };
+}
+
 export const LeadCard: React.FC<LeadCardProps> = ({
   lead,
   gradientIndex = 0,
@@ -38,6 +52,44 @@ export const LeadCard: React.FC<LeadCardProps> = ({
 }) => {
   const [isConsuming, setIsConsuming] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [isAlreadyConsumed, setIsAlreadyConsumed] = useState(false);
+  const [consumedData, setConsumedData] = useState<ConsumedLead | null>(null);
+  const [isCheckingConsumed, setIsCheckingConsumed] = useState(true);
+
+  useEffect(() => {
+    checkIfConsumed();
+  }, [lead.id]);
+
+  const checkIfConsumed = async () => {
+    try {
+      setIsCheckingConsumed(true);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/companies/consumed-leads`, {
+        headers: {
+          'Authorization': `Bearer ${await getAuthToken()}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const consumed = data.data.find((item: ConsumedLead) => item.leadId === lead.id);
+        
+        if (consumed) {
+          setIsAlreadyConsumed(true);
+          setConsumedData(consumed);
+          console.log('✅ Lead already consumed:', consumed);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check consumed leads:', error);
+    } finally {
+      setIsCheckingConsumed(false);
+    }
+  };
+
+  const getAuthToken = async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    return await AsyncStorage.getItem('authToken');
+  };
 
   const formatNumber = (num: string | null) => {
     if (!num) return 'N/A';
@@ -64,30 +116,65 @@ export const LeadCard: React.FC<LeadCardProps> = ({
     }
   };
 
-  const handlePhoneCall = async () => {
+  const handleDirectCall = async () => {
     setShowContactModal(false);
     
+    if (!consumedData) return;
+    
+    const phoneNumber = consumedData.lead.company.phoneNumber;
+    const phoneUrl = `tel:${phoneNumber}`;
+    
+    try {
+      const canOpen = await Linking.canOpenURL(phoneUrl);
+      if (canOpen) {
+        await Linking.openURL(phoneUrl);
+      } else {
+        Alert.alert('Error', 'Unable to make phone call');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to initiate call');
+    }
+  };
+
+  const handleDirectChat = () => {
+    setShowContactModal(false);
+    console.log('🚀 Navigating directly to chat (already consumed):', lead.companyId);
+    router.push(`/(app)/chat/${lead.companyId}`);
+  };
+
+  const handlePhoneCall = async () => {
     if (isConsuming) return;
 
+    setShowContactModal(false);
     setIsConsuming(true);
+
     try {
+      console.log('📞 Consuming lead for phone call:', lead.id);
       const response = await leadsAPI.consumeLead(lead.id);
-      if (response.data.success) {
+      
+      console.log('✅ Consume response:', response);
+      
+      if (response.status === 'success' && response.data?.contact) {
         const phoneNumber = response.data.contact;
+        console.log('✅ Got phone number:', phoneNumber);
         
-        // Make the phone call
+        // Update consumed status
+        setIsAlreadyConsumed(true);
+        
         const phoneUrl = `tel:${phoneNumber}`;
         const canOpen = await Linking.canOpenURL(phoneUrl);
         
         if (canOpen) {
           await Linking.openURL(phoneUrl);
+          onConsumeSuccess?.(phoneNumber);
         } else {
           Alert.alert('Error', 'Unable to make phone call');
         }
-        
-        onConsumeSuccess?.(phoneNumber);
+      } else {
+        throw new Error('Failed to get contact information');
       }
     } catch (error: any) {
+      console.error('❌ Phone call failed:', error);
       Alert.alert(
         'Error',
         error.message || 'Failed to get contact information. Please try again.'
@@ -98,75 +185,57 @@ export const LeadCard: React.FC<LeadCardProps> = ({
   };
 
   const handleChatOption = async () => {
-    setShowContactModal(false);
-    
     if (isConsuming) return;
 
+    setShowContactModal(false);
     setIsConsuming(true);
     
     try {
-      console.log('🔄 Starting chat process...');
+      console.log('💬 Starting chat flow for lead:', lead.id);
+      console.log('Company ID:', lead.companyId);
       
-      // Step 1: Consume the lead to get contact info
-      console.log('📞 Consuming lead:', lead.id);
+      console.log('📞 Consuming lead...');
       const consumeResponse = await leadsAPI.consumeLead(lead.id);
       
-      if (!consumeResponse.data.success) {
+      console.log('✅ Consume response:', consumeResponse);
+      
+      if (consumeResponse.status !== 'success' || !consumeResponse.data?.contact) {
         throw new Error('Failed to consume lead');
       }
       
       const phoneNumber = consumeResponse.data.contact;
-      console.log('✅ Lead consumed, got contact:', phoneNumber);
+      console.log('✅ Lead consumed, contact:', phoneNumber);
       
-      // Step 2: Prepare initial message
+      // Update consumed status
+      setIsAlreadyConsumed(true);
+      
+      // Send initial message only on first consume
       const initialMessage = `Hello! I'm interested in your lead: "${lead.title}". Can we discuss further?`;
       
-      console.log('💬 Sending initial message to:', lead.companyId);
-      console.log('Message:', initialMessage);
+      console.log('📤 Sending initial message...');
       
-      // Step 3: Send initial message via REST API
       try {
-        const messageResponse = await chatAPI.sendMessage({
+        await chatAPI.sendMessage({
           receiverId: lead.companyId,
           message: initialMessage,
           messageType: 'text',
         });
         
-        console.log('✅ Message sent successfully:', messageResponse.data);
-        
-        // Step 4: Navigate to the specific chat
-        console.log('🚀 Navigating to chat with:', lead.companyId);
-        router.push(`/(app)/chat/${lead.companyId}`);
-        
-        // Notify parent component
-        onConsumeSuccess?.(phoneNumber);
-        
+        console.log('✅ Message sent successfully');
       } catch (chatError: any) {
-        console.error('❌ Failed to send initial message:', chatError);
-        
-        // Even if message fails, still allow navigation
-        Alert.alert(
-          'Message Send Failed',
-          'Could not send the initial message, but you can still chat with the seller.',
-          [
-            {
-              text: 'Go to Chat Anyway',
-              onPress: () => {
-                console.log('🚀 Navigating to chat (after error):', lead.companyId);
-                router.push(`/(app)/chat/${lead.companyId}`);
-                onConsumeSuccess?.(phoneNumber);
-              }
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel'
-            }
-          ]
-        );
+        console.error('⚠️ Failed to send initial message (continuing anyway):', chatError);
       }
       
+      // Small delay then navigate
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log('🚀 Navigating to chat...');
+      router.push(`/(app)/chat/${lead.companyId}`);
+      
+      onConsumeSuccess?.(phoneNumber);
+      
     } catch (error: any) {
-      console.error('❌ Failed to start chat:', error);
+      console.error('❌ Chat flow failed:', error);
       
       Alert.alert(
         'Error',
@@ -218,7 +287,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({
           {lead.description}
         </Text>
 
-        {/* Highlighted Tags for Budget and Quantity */}
+        {/* Highlighted Tags */}
         <View style={styles.tagsContainer}>
           {lead.budget && (
             <View style={[styles.tag, styles.tagBudgetHighlight]}>
@@ -263,22 +332,28 @@ export const LeadCard: React.FC<LeadCardProps> = ({
 
         <TouchableOpacity
           onPress={() => setShowContactModal(true)}
-          disabled={isConsuming}
+          disabled={isConsuming || isCheckingConsumed}
           style={[isConsuming && styles.actionButtonDisabled]}
         >
           <LinearGradient
-            colors={['#3b82f6', '#8b5cf6']}
+            colors={isAlreadyConsumed ? ['#10b981', '#059669'] : ['#3b82f6', '#8b5cf6']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={styles.actionButton}
           >
-            {isConsuming ? (
+            {isCheckingConsumed ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#ffffff" />
+              </View>
+            ) : isConsuming ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#ffffff" />
                 <Text style={styles.actionButtonText}>Processing...</Text>
               </View>
             ) : (
-              <Text style={styles.actionButtonText}>Talk to Seller</Text>
+              <Text style={styles.actionButtonText}>
+                {isAlreadyConsumed ? 'Contact Seller' : 'Talk to Seller'}
+              </Text>
             )}
           </LinearGradient>
         </TouchableOpacity>
@@ -289,7 +364,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({
         visible={showContactModal}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowContactModal(false)}
+        onRequestClose={() => !isConsuming && setShowContactModal(false)}
       >
         <TouchableOpacity 
           style={styles.modalOverlay}
@@ -309,13 +384,17 @@ export const LeadCard: React.FC<LeadCardProps> = ({
             </View>
 
             <Text style={styles.modalSubtitle}>
-              {isConsuming ? 'Setting up your connection...' : 'Choose how to connect'}
+              {isConsuming 
+                ? 'Setting up your connection...' 
+                : isAlreadyConsumed
+                  ? 'Choose how to connect'
+                  : 'This will consume 1 lead credit'}
             </Text>
 
             {/* Phone Option */}
             <TouchableOpacity
               style={[styles.contactOption, isConsuming && styles.optionDisabled]}
-              onPress={handlePhoneCall}
+              onPress={isAlreadyConsumed ? handleDirectCall : handlePhoneCall}
               disabled={isConsuming}
               activeOpacity={0.7}
             >
@@ -325,7 +404,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({
               <View style={styles.optionTextWrapper}>
                 <Text style={styles.optionTitle}>Phone Call</Text>
                 <Text style={styles.optionSubtitle}>
-                  Call seller directly
+                  {isAlreadyConsumed ? 'Call seller directly' : 'Get contact & call'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -333,7 +412,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({
             {/* Chat Option */}
             <TouchableOpacity
               style={[styles.contactOption, isConsuming && styles.optionDisabled]}
-              onPress={handleChatOption}
+              onPress={isAlreadyConsumed ? handleDirectChat : handleChatOption}
               disabled={isConsuming}
               activeOpacity={0.7}
             >
@@ -343,7 +422,9 @@ export const LeadCard: React.FC<LeadCardProps> = ({
               <View style={styles.optionTextWrapper}>
                 <Text style={styles.optionTitle}>Start Chat</Text>
                 <Text style={styles.optionSubtitle}>
-                  Send a message and start chatting
+                  {isAlreadyConsumed 
+                    ? 'Continue conversation' 
+                    : 'Send initial message & start chatting'}
                 </Text>
               </View>
             </TouchableOpacity>

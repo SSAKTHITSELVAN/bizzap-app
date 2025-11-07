@@ -31,6 +31,26 @@ interface Company {
   operationalAddress: string | null;
 }
 
+// --- Interface for Consumed Leads ---
+interface ConsumedLeadResponse {
+  id: string;
+  companyId: string;
+  leadId: string;
+  consumedAt: string;
+  lead: {
+    id: string;
+    title: string;
+    description: string;
+    company: {
+      id: string;
+      phoneNumber: string;
+      companyName: string;
+      logo: string | null;
+    };
+    companyId: string;
+  };
+}
+
 interface Lead {
   id: string;
   title: string;
@@ -387,6 +407,13 @@ export const subscriptionAPI = {
   verifyPayAsYouGoPayment: async (data: PaymentVerification): Promise<{ message: string; data: PayAsYouGoVerifyResponse }> => {
     return apiCall('companies/pay-as-you-go/verify-payment', 'POST', data);
   },
+
+    /**
+   * Get all consumed leads by the current user (auth required)
+   */
+  getConsumedLeads: async (): Promise<ApiResponse<ConsumedLeadResponse[]>> => {
+    return apiCall('companies/consumed-leads');
+  },
 };
 
 // Export types for use in components
@@ -403,5 +430,6 @@ export type {
   CurrentSubscription,
   CreateOrderResponse,
   PaymentVerification,
-  PayAsYouGoVerifyResponse
+  PayAsYouGoVerifyResponse,
+  ConsumedLeadResponse
 };

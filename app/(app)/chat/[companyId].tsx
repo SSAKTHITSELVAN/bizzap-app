@@ -1,4 +1,4 @@
-// app/(app)/chat/[companyId].tsx - FIXED: Correct File Upload & Display
+// app/(app)/chat/[companyId].tsx - FIXED: Message Order & Keyboard Handling
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -17,6 +17,7 @@ import {
   Modal,
   Animated,
   ScrollView,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -68,7 +69,6 @@ interface SelectedFile {
   size?: number;
 }
 
-// Success Toast Component
 interface ToastProps {
   message: string;
   visible: boolean;
@@ -130,13 +130,10 @@ export default function ChatScreen() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fullScreenMedia, setFullScreenMedia] = useState<{ url: string; mimeType: string } | null>(null);
-  
-  // NEW: File selection state
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
-  
-  // Toast state
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
     if (companyId) {
@@ -144,6 +141,26 @@ export default function ChatScreen() {
       fetchPartnerInfo();
       fetchChatHistory();
     }
+
+    // Keyboard listeners
+    const keyboardWillShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    
+    const keyboardWillHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShowListener.remove();
+      keyboardWillHideListener.remove();
+    };
   }, [companyId]);
 
   useEffect(() => {
@@ -179,7 +196,9 @@ export default function ChatScreen() {
     try {
       setLoading(true);
       const response = await chatAPI.getChatHistory(companyId);
-      setMessages(response.data.reverse());
+      
+      // FIXED: Don't reverse - API returns oldest first, we want newest at bottom
+      setMessages(response.data);
 
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
@@ -247,7 +266,6 @@ export default function ChatScreen() {
     }
   };
 
-  // FIXED: Pick images - add to selection, don't send immediately
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -275,7 +293,6 @@ export default function ChatScreen() {
     }
   };
 
-  // FIXED: Pick document - add to selection
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -298,15 +315,12 @@ export default function ChatScreen() {
     }
   };
 
-  // Remove selected file
   const removeSelectedFile = (index: number) => {
     setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
   };
 
-  // FIXED: Send files with message
   const sendFilesWithMessage = async () => {
     if (selectedFiles.length === 0) {
-      // No files, just send text message
       await sendMessage();
       return;
     }
@@ -317,44 +331,29 @@ export default function ChatScreen() {
 
       const messageText = inputText.trim();
 
-      console.log('📤 Sending files:', {
-        fileCount: selectedFiles.length,
-        hasMessage: !!messageText,
-        files: selectedFiles.map(f => ({ name: f.name, type: f.type })),
-      });
-
-      // Send each file
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        
-        console.log(`Sending file ${i + 1}/${selectedFiles.length}:`, file.name);
 
         const response = await chatAPI.sendFile(
           companyId,
           file,
-          i === 0 ? messageText : '', // Only send message with first file
+          i === 0 ? messageText : '',
           (progress) => {
             const totalProgress = ((i / selectedFiles.length) * 100) + (progress / selectedFiles.length);
             setUploadProgress(Math.round(totalProgress));
           }
         );
 
-        console.log('✅ File sent:', response.data);
-
-        // Add message to list
         setMessages((prev) => [...prev, response.data]);
       }
 
-      // Clear inputs
       setInputText('');
       setSelectedFiles([]);
       setUploadProgress(0);
 
-      // Show success
       setSuccessMessage(selectedFiles.length > 1 ? 'Files sent! 📎' : 'File sent! 📎');
       setShowSuccessToast(true);
 
-      // Scroll to bottom
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -367,7 +366,6 @@ export default function ChatScreen() {
     }
   };
 
-  // FIXED: Main send handler
   const handleSend = async () => {
     if (selectedFiles.length > 0) {
       await sendFilesWithMessage();
@@ -435,16 +433,13 @@ export default function ChatScreen() {
     setSuccessMessage('');
   };
 
-  // FIXED: Get correct image URL
   const getImageUrl = (fileUrl?: string) => {
     if (!fileUrl) return 'https://via.placeholder.com/150';
     
-    // If it's already a full URL (S3), use it as-is
     if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
       return fileUrl;
     }
     
-    // Otherwise, prepend the API base URL
     return `${Config.API_BASE_URL}/${fileUrl}`;
   };
 
@@ -580,7 +575,7 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {/* HEADER */}
@@ -613,16 +608,19 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* CHAT MESSAGES LIST */}
+        {/* CHAT MESSAGES LIST - FIXED: inverted={false} so oldest is top, newest is bottom */}
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.messageList, { paddingBottom: sizeScale(100) }]}
+          contentContainerStyle={styles.messageList}
           inverted={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+          }}
           showsVerticalScrollIndicator={false}
         />
 
@@ -685,7 +683,7 @@ export default function ChatScreen() {
           </View>
         )}
 
-        {/* MESSAGE INPUT */}
+        {/* MESSAGE INPUT - FIXED: Proper padding and positioning */}
         <View style={styles.inputContainer}>
           <TouchableOpacity 
             onPress={pickImage} 
@@ -875,6 +873,7 @@ const styles = StyleSheet.create({
   messageList: {
     paddingHorizontal: sizeScale(12),
     paddingVertical: sizeScale(12),
+    paddingBottom: sizeScale(20),
   },
   messageContainer: {
     maxWidth: '80%',
@@ -1035,7 +1034,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: sizeScale(16),
     paddingTop: sizeScale(10),
-    paddingBottom: Platform.OS === 'ios' ? sizeScale(90) : sizeScale(85),
+    paddingBottom: Platform.OS === 'ios' ? sizeScale(30) : sizeScale(90),
     borderTopWidth: 1,
     borderTopColor: '#1F2937',
     backgroundColor: '#000000',
