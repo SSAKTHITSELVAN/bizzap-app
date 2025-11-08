@@ -1,4 +1,4 @@
-// // app/(app)/bizzapai/index.tsx - COMPLETE UPDATED VERSION
+// // app/(app)/bizzapai/index.tsx - UPDATED VERSION WITH CREATE POST
 
 // import React, { useState, useRef, useEffect } from 'react';
 // import {
@@ -40,14 +40,6 @@
 //   timestamp: Date;
 // }
 
-// interface Suggestion {
-//   icon: string;
-//   title: string;
-//   description: string;
-//   isNavigate?: boolean;
-//   navigateTo?: string;
-// }
-
 // // --- Helper Function ---
 // const hasMinimumRequiredData = (data: AIGeneratedData | null): boolean => {
 //   if (!data) return false;
@@ -59,24 +51,29 @@
 //   );
 // };
 
-// // --- Suggestion Card Component ---
-// const SuggestionCard = ({
+// // --- Action Button Component ---
+// const ActionButton = ({
 //   icon,
 //   title,
 //   description,
-//   onPress
+//   onPress,
+//   color = '#4C1D95'
 // }: {
 //   icon: string;
 //   title: string;
 //   description: string;
 //   onPress: () => void;
+//   color?: string;
 // }) => (
-//   <TouchableOpacity style={styles.suggestionCard} onPress={onPress} activeOpacity={0.7}>
-//     <View style={styles.suggestionIcon}>
-//       <MaterialCommunityIcons name={icon as any} size={sizeScale(24)} color="#4C1D95" />
+//   <TouchableOpacity style={styles.actionButton} onPress={onPress} activeOpacity={0.7}>
+//     <View style={[styles.actionIcon, { backgroundColor: color }]}>
+//       <MaterialCommunityIcons name={icon as any} size={sizeScale(24)} color="#fff" />
 //     </View>
-//     <Text style={styles.suggestionTitle}>{title}</Text>
-//     <Text style={styles.suggestionDescription}>{description}</Text>
+//     <View style={styles.actionTextContainer}>
+//       <Text style={styles.actionTitle}>{title}</Text>
+//       <Text style={styles.actionDescription}>{description}</Text>
+//     </View>
+//     <Ionicons name="chevron-forward" size={sizeScale(20)} color="#666" />
 //   </TouchableOpacity>
 // );
 
@@ -144,37 +141,12 @@
 //   const [uploadedImage, setUploadedImage] = useState<any>(null);
 //   const [isSubmitting, setIsSubmitting] = useState(false);
 
-//   const suggestions: Suggestion[] = [
-//     {
-//       icon: 'post',
-//       title: 'Create Posts',
-//       description: 'Share your story with photos or videos',
-//       isNavigate: true,
-//       navigateTo: '/bizzapai/create-post',
-//     },
-//     {
-//       icon: 'package-variant',
-//       title: 'Product Lead',
-//       description: 'I need 1000 units of cotton fabric',
-//     },
-//     {
-//       icon: 'office-building',
-//       title: 'Service Lead',
-//       description: 'Looking for web development services',
-//     },
-//     {
-//       icon: 'lightbulb-on',
-//       title: 'Custom Request',
-//       description: 'Describe your requirement',
-//     },
-//   ];
+//   const handlePostLeadPress = () => {
+//     setInputText("I need help creating a lead for my business requirement");
+//   };
 
-//   const handleSuggestionPress = (suggestion: Suggestion) => {
-//     if (suggestion.isNavigate && suggestion.navigateTo) {
-//       router.push(suggestion.navigateTo as any);
-//     } else {
-//       setInputText(suggestion.description);
-//     }
+//   const handleCreatePostPress = () => {
+//     router.push('/bizzapai/create-post' as any);
 //   };
 
 //   const handleSend = async () => {
@@ -365,7 +337,6 @@
 //     setIsSubmitting(true);
 
 //     try {
-//       // Prepare lead data
 //       const leadData: any = {
 //         title: aiGeneratedData.title,
 //         description: aiGeneratedData.description !== 'No description provided'
@@ -374,7 +345,6 @@
 //         quantity: `${aiGeneratedData.quantity} ${aiGeneratedData.unit}`,
 //       };
 
-//       // Add optional fields
 //       if (aiGeneratedData.location && aiGeneratedData.location !== 'Location not specified') {
 //         leadData.location = aiGeneratedData.location;
 //       }
@@ -383,7 +353,6 @@
 //         leadData.budget = `₹${aiGeneratedData.min_budget} - ₹${aiGeneratedData.max_budget}`;
 //       }
 
-//       // CRITICAL FIX: Format image for different platforms
 //       const imageUri = uploadedImage.uri;
 //       const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
 //       const fileName = uploadedImage.fileName || 
@@ -408,9 +377,7 @@
 //         platform: Platform.OS,
 //       });
 
-//       // Platform-specific image formatting
 //       if (Platform.OS === 'web') {
-//         // For web: Convert blob URI to File object
 //         try {
 //           console.log('🌐 Converting image for web...');
 //           const response = await fetch(imageUri);
@@ -422,7 +389,6 @@
 //           throw new Error('Failed to process image. Please try again.');
 //         }
 //       } else {
-//         // For native (iOS/Android)
 //         leadData.image = {
 //           uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
 //           name: fileName,
@@ -508,23 +474,26 @@
 //         </View>
 //         <Text style={styles.welcomeTitle}>Hello! I'm BizzapAI</Text>
 //         <Text style={styles.welcomeSubtitle}>
-//           Your intelligent lead creation assistant
+//           Your intelligent assistant for leads and posts
 //         </Text>
 //       </View>
 
-//       <View style={styles.suggestionsContainer}>
-//         <Text style={styles.suggestionsTitle}>Try these examples:</Text>
-//         <View style={styles.suggestionsGrid}>
-//           {suggestions.map((suggestion, index) => (
-//             <SuggestionCard
-//               key={index}
-//               icon={suggestion.icon}
-//               title={suggestion.title}
-//               description={suggestion.description}
-//               onPress={() => handleSuggestionPress(suggestion)}
-//             />
-//           ))}
-//         </View>
+//       <View style={styles.actionsContainer}>
+//         <Text style={styles.actionsTitle}>Get started:</Text>
+//         <ActionButton
+//           icon="package-variant"
+//           title="Post a Lead"
+//           description="Create your lead requirement with AI"
+//           onPress={handlePostLeadPress}
+//           color="#4C1D95"
+//         />
+//         <ActionButton
+//           icon="post"
+//           title="Create Post"
+//           description="Share your story with photos or videos"
+//           onPress={handleCreatePostPress}
+//           color="#7C3AED"
+//         />
 //       </View>
 //     </ScrollView>
 //   );
@@ -540,15 +509,30 @@
 //           {messages.length === 1 ? (
 //             renderEmptyState()
 //           ) : (
-//             <FlatList
-//               ref={flatListRef}
-//               data={messages}
-//               renderItem={renderMessage}
-//               keyExtractor={(item) => item.id}
-//               contentContainerStyle={styles.messagesList}
-//               showsVerticalScrollIndicator={false}
-//               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-//             />
+//             <>
+//               {/* Create Post Button at Top */}
+//               <View style={styles.topBarContainer}>
+//                 <TouchableOpacity 
+//                   style={styles.createPostButton}
+//                   onPress={handleCreatePostPress}
+//                   activeOpacity={0.7}
+//                 >
+//                   <Ionicons name="add-circle" size={sizeScale(20)} color="#7C3AED" />
+//                   <Text style={styles.createPostText}>Create Post</Text>
+//                 </TouchableOpacity>
+//               </View>
+              
+//               {/* Messages List */}
+//               <FlatList
+//                 ref={flatListRef}
+//                 data={messages}
+//                 renderItem={renderMessage}
+//                 keyExtractor={(item) => item.id}
+//                 contentContainerStyle={styles.messagesList}
+//                 showsVerticalScrollIndicator={false}
+//                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+//               />
+//             </>
 //           )}
 
 //           {isTyping && (
@@ -611,13 +595,11 @@
 
 //               {aiGeneratedData && (
 //                 <View style={styles.previewContainer}>
-//                   {/* Title */}
 //                   <View style={styles.previewSection}>
 //                     <Text style={styles.previewLabel}>Title</Text>
 //                     <Text style={styles.previewValue}>{aiGeneratedData.title}</Text>
 //                   </View>
 
-//                   {/* Description */}
 //                   {aiGeneratedData.description !== 'No description provided' && (
 //                     <View style={styles.previewSection}>
 //                       <Text style={styles.previewLabel}>Description</Text>
@@ -625,7 +607,6 @@
 //                     </View>
 //                   )}
 
-//                   {/* Location */}
 //                   {aiGeneratedData.location !== 'Location not specified' && (
 //                     <View style={styles.previewSection}>
 //                       <Text style={styles.previewLabel}>Location</Text>
@@ -633,7 +614,6 @@
 //                     </View>
 //                   )}
 
-//                   {/* Quantity */}
 //                   <View style={styles.previewSection}>
 //                     <Text style={styles.previewLabel}>Quantity</Text>
 //                     <Text style={styles.previewValue}>
@@ -641,7 +621,6 @@
 //                     </Text>
 //                   </View>
 
-//                   {/* Budget */}
 //                   {aiGeneratedData.min_budget !== '0' && aiGeneratedData.max_budget !== '0' && (
 //                     <View style={styles.previewSection}>
 //                       <Text style={styles.previewLabel}>Budget</Text>
@@ -651,7 +630,6 @@
 //                     </View>
 //                   )}
 
-//                   {/* Image Upload */}
 //                   <View style={styles.previewSection}>
 //                     <Text style={styles.previewLabel}>Product Image *</Text>
 //                     <TouchableOpacity
@@ -680,7 +658,6 @@
 //                 </View>
 //               )}
 
-//               {/* Action Buttons */}
 //               <View style={styles.modalActions}>
 //                 <TouchableOpacity
 //                   style={[styles.modalButton, styles.skipButton]}
@@ -754,51 +731,72 @@
 //     color: '#666',
 //     textAlign: 'center',
 //   },
-//   suggestionsContainer: {
+//   actionsContainer: {
 //     flex: 1,
+//     gap: sizeScale(12),
 //   },
-//   suggestionsTitle: {
+//   actionsTitle: {
 //     fontSize: sizeScale(16),
 //     fontWeight: '600',
 //     color: '#fff',
-//     marginBottom: sizeScale(16),
+//     marginBottom: sizeScale(4),
 //   },
-//   suggestionsGrid: {
-//     flexDirection: 'row',
-//     flexWrap: 'wrap',
-//     gap: sizeScale(12),
-//   },
-//   suggestionCard: {
-//     width: (SCREEN_WIDTH - sizeScale(52)) / 2,
+//   actionButton: {
 //     backgroundColor: '#1a1a1a',
 //     borderRadius: sizeScale(16),
-//     padding: sizeScale(16),
+//     padding: sizeScale(20),
 //     borderWidth: 1,
 //     borderColor: '#2a2a2a',
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     gap: sizeScale(16),
 //   },
-//   suggestionIcon: {
+//   actionIcon: {
 //     width: sizeScale(48),
 //     height: sizeScale(48),
 //     borderRadius: sizeScale(24),
-//     backgroundColor: '#0D0D0D',
 //     justifyContent: 'center',
 //     alignItems: 'center',
-//     marginBottom: sizeScale(12),
 //   },
-//   suggestionTitle: {
-//     fontSize: sizeScale(15),
+//   actionTextContainer: {
+//     flex: 1,
+//   },
+//   actionTitle: {
+//     fontSize: sizeScale(17),
 //     fontWeight: '700',
 //     color: '#fff',
 //     marginBottom: sizeScale(4),
 //   },
-//   suggestionDescription: {
-//     fontSize: sizeScale(13),
+//   actionDescription: {
+//     fontSize: sizeScale(14),
 //     color: '#666',
-//     lineHeight: sizeScale(18),
+//   },
+//   topBarContainer: {
+//     paddingHorizontal: sizeScale(16),
+//     paddingVertical: sizeScale(12),
+//     borderBottomWidth: 1,
+//     borderBottomColor: '#1a1a1a',
+//   },
+//   createPostButton: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     alignSelf: 'flex-start',
+//     backgroundColor: 'rgba(124, 58, 237, 0.1)',
+//     paddingHorizontal: sizeScale(16),
+//     paddingVertical: sizeScale(10),
+//     borderRadius: sizeScale(20),
+//     borderWidth: 1,
+//     borderColor: '#7C3AED',
+//     gap: sizeScale(8),
+//   },
+//   createPostText: {
+//     fontSize: sizeScale(15),
+//     fontWeight: '600',
+//     color: '#7C3AED',
 //   },
 //   messagesList: {
 //     paddingHorizontal: sizeScale(16),
-//     paddingVertical: sizeScale(20),
+//     paddingVertical: sizeScale(12),
 //     paddingBottom: sizeScale(120),
 //   },
 //   messageBubble: {
@@ -1016,7 +1014,11 @@
 // });
 
 
-// app/(app)/bizzapai/index.tsx - UPDATED VERSION WITH CREATE POST
+
+
+
+
+// app/(app)/bizzapai/index.tsx - WITH DEBUG CONSOLE
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -1058,6 +1060,14 @@ interface Message {
   timestamp: Date;
 }
 
+interface DebugLog {
+  id: string;
+  timestamp: string;
+  type: 'info' | 'success' | 'error' | 'warning';
+  message: string;
+  details?: any;
+}
+
 // --- Helper Function ---
 const hasMinimumRequiredData = (data: AIGeneratedData | null): boolean => {
   if (!data) return false;
@@ -1066,6 +1076,84 @@ const hasMinimumRequiredData = (data: AIGeneratedData | null): boolean => {
     data.quantity &&
     data.unit &&
     (data.description || data.location || data.min_budget || data.max_budget)
+  );
+};
+
+// --- Debug Log Component ---
+const DebugConsole = ({ 
+  logs, 
+  visible, 
+  onClose 
+}: { 
+  logs: DebugLog[]; 
+  visible: boolean; 
+  onClose: () => void;
+}) => {
+  const getLogColor = (type: DebugLog['type']) => {
+    switch (type) {
+      case 'success': return '#10B981';
+      case 'error': return '#EF4444';
+      case 'warning': return '#F59E0B';
+      default: return '#3B82F6';
+    }
+  };
+
+  const getLogIcon = (type: DebugLog['type']) => {
+    switch (type) {
+      case 'success': return 'checkmark-circle';
+      case 'error': return 'close-circle';
+      case 'warning': return 'warning';
+      default: return 'information-circle';
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.debugModalOverlay}>
+        <View style={styles.debugModalContent}>
+          <View style={styles.debugHeader}>
+            <Text style={styles.debugTitle}>🐛 Debug Console</Text>
+            <TouchableOpacity onPress={onClose} style={styles.debugCloseButton}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.debugLogContainer}>
+            {logs.map((log) => (
+              <View key={log.id} style={styles.debugLogItem}>
+                <View style={styles.debugLogHeader}>
+                  <Ionicons 
+                    name={getLogIcon(log.type) as any} 
+                    size={16} 
+                    color={getLogColor(log.type)} 
+                  />
+                  <Text style={[styles.debugLogType, { color: getLogColor(log.type) }]}>
+                    {log.type.toUpperCase()}
+                  </Text>
+                  <Text style={styles.debugLogTime}>{log.timestamp}</Text>
+                </View>
+                <Text style={styles.debugLogMessage}>{log.message}</Text>
+                {log.details && (
+                  <Text style={styles.debugLogDetails}>
+                    {typeof log.details === 'string' 
+                      ? log.details 
+                      : JSON.stringify(log.details, null, 2)}
+                  </Text>
+                )}
+              </View>
+            ))}
+            {logs.length === 0 && (
+              <Text style={styles.debugEmpty}>No logs yet. Perform an action to see logs.</Text>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
@@ -1159,11 +1247,35 @@ export default function BizzapAIScreen() {
   const [uploadedImage, setUploadedImage] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Debug states
+  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
+  const [showDebugConsole, setShowDebugConsole] = useState(false);
+
+  // Debug logging function
+  const addDebugLog = (type: DebugLog['type'], message: string, details?: any) => {
+    const log: DebugLog = {
+      id: Date.now().toString(),
+      timestamp: new Date().toLocaleTimeString(),
+      type,
+      message,
+      details,
+    };
+    setDebugLogs(prev => [...prev, log]);
+    console.log(`[${type.toUpperCase()}]`, message, details || '');
+  };
+
+  const clearDebugLogs = () => {
+    setDebugLogs([]);
+    addDebugLog('info', 'Debug logs cleared');
+  };
+
   const handlePostLeadPress = () => {
     setInputText("I need help creating a lead for my business requirement");
+    addDebugLog('info', 'Post Lead button pressed');
   };
 
   const handleCreatePostPress = () => {
+    addDebugLog('info', 'Navigating to create post screen');
     router.push('/bizzapai/create-post' as any);
   };
 
@@ -1183,14 +1295,22 @@ export default function BizzapAIScreen() {
     setInputHeight(sizeScale(40));
     setIsTyping(true);
 
+    addDebugLog('info', 'Sending message to AI', { input: currentInput });
+
     try {
-      console.log('📄 Calling AI API with:', {
-        input: currentInput,
-        historyLength: conversationHistory.length,
+      addDebugLog('info', 'Calling AI API...', {
+        baseURL: Config.AI_BASE_URL,
+        endpoint: 'process_requirement',
+        inputLength: currentInput.length,
       });
 
       const response = await aiAPI.generateLead(currentInput, conversationHistory);
-      console.log('✅ AI API Response received:', response);
+      
+      addDebugLog('success', 'AI API Response received', {
+        code: response.data.code,
+        hasTitle: !!response.data.title,
+        hasDescription: !!response.data.description,
+      });
 
       if (!response || !response.data) {
         throw new Error('AI service returned invalid response format');
@@ -1202,10 +1322,8 @@ export default function BizzapAIScreen() {
         throw new Error('AI service returned incomplete data (missing code field)');
       }
 
-      console.log('📊 Processing response with code:', bizData.code);
-
       if (hasMinimumRequiredData(bizData)) {
-        console.log('✅ Minimum required data met, setting preview data');
+        addDebugLog('success', 'Minimum required data met, showing preview modal');
         setAiGeneratedData({
           ...bizData,
           title: bizData.title || 'Untitled',
@@ -1278,7 +1396,11 @@ export default function BizzapAIScreen() {
       }
 
     } catch (error: any) {
-      console.error('❌ AI API error:', error);
+      addDebugLog('error', 'AI API Error', {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+      });
 
       const isConnectionError =
         error.message?.includes('connect') ||
@@ -1288,11 +1410,7 @@ export default function BizzapAIScreen() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: isConnectionError
-          ? '❌ Cannot connect to AI service. Please check:\n\n' +
-            '• Backend server is running\n' +
-            '• Correct URL in config.ts\n' +
-            '• CORS is enabled\n\n' +
-            'Current AI URL: ' + (Config.AI_BASE_URL || 'Not configured')
+          ? '❌ Cannot connect to AI service. Check Debug Console for details.'
           : `❌ ${error.message || 'Something went wrong. Please try again.'}`,
         isUser: false,
         timestamp: new Date(),
@@ -1308,12 +1426,17 @@ export default function BizzapAIScreen() {
 
   const handleImagePicker = async () => {
     try {
+      addDebugLog('info', 'Opening image picker...');
+      
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
+        addDebugLog('warning', 'Image picker permission denied');
         Alert.alert('Permission Required', 'Please allow access to your photos to upload an image.');
         return;
       }
+
+      addDebugLog('success', 'Image picker permission granted');
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -1324,35 +1447,43 @@ export default function BizzapAIScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setUploadedImage(result.assets[0]);
-        console.log('🖼️ Image selected:', {
-          uri: result.assets[0].uri,
+        addDebugLog('success', 'Image selected', {
+          uri: result.assets[0].uri.substring(0, 50) + '...',
+          fileName: result.assets[0].fileName,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
           type: result.assets[0].type || result.assets[0].mimeType,
-          name: result.assets[0].fileName,
         });
+      } else {
+        addDebugLog('info', 'Image picker cancelled');
       }
-    } catch (error) {
-      console.error('Image picker error:', error);
+    } catch (error: any) {
+      addDebugLog('error', 'Image picker error', error.message);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
   const handleSkip = () => {
+    addDebugLog('info', 'Preview modal skipped');
     setShowPreviewModal(false);
     setUploadedImage(null);
   };
 
   const handleSubmit = async () => {
     if (!aiGeneratedData) {
+      addDebugLog('error', 'Submit failed: No lead data available');
       Alert.alert('Error', 'No lead data available');
       return;
     }
 
     if (!uploadedImage) {
+      addDebugLog('error', 'Submit failed: No image uploaded');
       Alert.alert('Image Required', 'Please upload an image before submitting');
       return;
     }
 
     setIsSubmitting(true);
+    addDebugLog('info', '=== STARTING LEAD SUBMISSION ===');
 
     try {
       const leadData: any = {
@@ -1371,6 +1502,14 @@ export default function BizzapAIScreen() {
         leadData.budget = `₹${aiGeneratedData.min_budget} - ₹${aiGeneratedData.max_budget}`;
       }
 
+      addDebugLog('info', 'Lead data prepared', {
+        title: leadData.title,
+        descriptionLength: leadData.description?.length,
+        hasLocation: !!leadData.location,
+        hasBudget: !!leadData.budget,
+      });
+
+      // IMAGE PROCESSING
       const imageUri = uploadedImage.uri;
       const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = uploadedImage.fileName || 
@@ -1382,50 +1521,74 @@ export default function BizzapAIScreen() {
         'jpeg': 'image/jpeg',
         'png': 'image/png',
         'webp': 'image/webp',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
       };
       const mimeType = uploadedImage.type || 
                       uploadedImage.mimeType || 
                       mimeTypes[fileExtension] || 
                       'image/jpeg';
 
-      console.log('🔍 Image debug info:', {
-        uri: imageUri,
+      addDebugLog('info', 'Processing image', {
+        platform: Platform.OS,
+        uriPrefix: imageUri.substring(0, 30) + '...',
         fileName,
         mimeType,
-        platform: Platform.OS,
+        fileExtension,
+        hasWidth: !!uploadedImage.width,
+        hasHeight: !!uploadedImage.height,
+        width: uploadedImage.width,
+        height: uploadedImage.height,
       });
 
       if (Platform.OS === 'web') {
         try {
-          console.log('🌐 Converting image for web...');
+          addDebugLog('info', 'Converting image for web platform');
           const response = await fetch(imageUri);
           const blob = await response.blob();
           leadData.image = new File([blob], fileName, { type: mimeType });
-          console.log('✅ Web File created:', leadData.image);
-        } catch (error) {
-          console.error('Failed to convert image to File:', error);
+          addDebugLog('success', 'Web File created', {
+            name: leadData.image.name,
+            size: leadData.image.size,
+            type: leadData.image.type,
+          });
+        } catch (error: any) {
+          addDebugLog('error', 'Failed to convert image to File', error.message);
           throw new Error('Failed to process image. Please try again.');
         }
       } else {
+        // Native platform
         leadData.image = {
           uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
           name: fileName,
           type: mimeType,
         };
-        console.log('📱 Native image object created:', leadData.image);
+        addDebugLog('info', 'Native image object created', {
+          uriPrefix: leadData.image.uri.substring(0, 30) + '...',
+          name: leadData.image.name,
+          type: leadData.image.type,
+        });
       }
 
-      console.log('📤 Submitting lead:', {
-        title: leadData.title,
+      addDebugLog('info', 'Calling leadsAPI.createLead', {
+        endpoint: `${Config.API_BASE_URL}/leads`,
+        method: 'POST (multipart/form-data)',
         hasImage: true,
         platform: Platform.OS,
       });
 
       const response = await leadsAPI.createLead(leadData);
 
-      console.log('✅ Lead created successfully:', response);
+      addDebugLog('success', 'Lead API Response received', {
+        statusCode: response.statusCode,
+        status: response.status,
+        message: response.message,
+        hasData: !!response.data,
+      });
 
       if (response.statusCode === 201) {
+        addDebugLog('success', '=== LEAD SUBMITTED SUCCESSFULLY ===');
+        
         Alert.alert('Success', 'Lead created successfully!', [
           { text: 'OK', onPress: () => router.back() }
         ]);
@@ -1445,15 +1608,31 @@ export default function BizzapAIScreen() {
       }
 
     } catch (error: any) {
-      console.error('❌ Submission error:', error);
-      
-      const errorMessage = error.message || 'Failed to create lead. Please try again.';
-      Alert.alert('Error', errorMessage);
-      
-      console.error('Full error details:', {
-        message: error.message,
-        response: error.response?.data,
+      addDebugLog('error', '=== LEAD SUBMISSION FAILED ===', {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        responseStatus: error.response?.status,
+        responseData: error.response?.data,
+        requestURL: error.config?.url,
+        requestMethod: error.config?.method,
+        isNetworkError: !error.response && !!error.request,
+        isTimeout: error.code === 'ECONNABORTED',
       });
+      
+      let errorMessage = 'Failed to create lead. Check Debug Console for details.';
+      
+      if (error.message?.toLowerCase().includes('network')) {
+        errorMessage = 'Network error: Unable to connect. Check Debug Console.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timeout. Check Debug Console.';
+      } else if (error.response?.status === 413) {
+        errorMessage = 'Image file is too large. Please select a smaller image.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -1528,7 +1707,7 @@ export default function BizzapAIScreen() {
             renderEmptyState()
           ) : (
             <>
-              {/* Create Post Button at Top */}
+              {/* Top Bar with Create Post and Debug Button */}
               <View style={styles.topBarContainer}>
                 <TouchableOpacity 
                   style={styles.createPostButton}
@@ -1537,6 +1716,17 @@ export default function BizzapAIScreen() {
                 >
                   <Ionicons name="add-circle" size={sizeScale(20)} color="#7C3AED" />
                   <Text style={styles.createPostText}>Create Post</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.debugButton}
+                  onPress={() => setShowDebugConsole(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="bug" size={sizeScale(20)} color="#EF4444" />
+                  <View style={styles.debugBadge}>
+                    <Text style={styles.debugBadgeText}>{debugLogs.length}</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
               
@@ -1705,6 +1895,13 @@ export default function BizzapAIScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Debug Console Modal */}
+      <DebugConsole 
+        logs={debugLogs} 
+        visible={showDebugConsole} 
+        onClose={() => setShowDebugConsole(false)} 
+      />
     </SafeAreaView>
   );
 }
@@ -1790,6 +1987,9 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   topBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: sizeScale(16),
     paddingVertical: sizeScale(12),
     borderBottomWidth: 1,
@@ -1798,7 +1998,6 @@ const styles = StyleSheet.create({
   createPostButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     backgroundColor: 'rgba(124, 58, 237, 0.1)',
     paddingHorizontal: sizeScale(16),
     paddingVertical: sizeScale(10),
@@ -1811,6 +2010,34 @@ const styles = StyleSheet.create({
     fontSize: sizeScale(15),
     fontWeight: '600',
     color: '#7C3AED',
+  },
+  debugButton: {
+    width: sizeScale(40),
+    height: sizeScale(40),
+    borderRadius: sizeScale(20),
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  debugBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  debugBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
   messagesList: {
     paddingHorizontal: sizeScale(16),
@@ -2028,5 +2255,84 @@ const styles = StyleSheet.create({
     fontSize: sizeScale(16),
     fontWeight: '600',
     color: '#fff',
+  },
+  // Debug Console Styles
+  debugModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  debugModalContent: {
+    flex: 1,
+    backgroundColor: '#0a0a0a',
+  },
+  debugHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: sizeScale(20),
+    paddingVertical: sizeScale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  debugTitle: {
+    fontSize: sizeScale(20),
+    fontWeight: '700',
+    color: '#fff',
+  },
+  debugCloseButton: {
+    width: sizeScale(40),
+    height: sizeScale(40),
+    borderRadius: sizeScale(20),
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  debugLogContainer: {
+    flex: 1,
+    paddingHorizontal: sizeScale(16),
+  },
+  debugLogItem: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: sizeScale(8),
+    padding: sizeScale(12),
+    marginVertical: sizeScale(6),
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  debugLogHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: sizeScale(8),
+    gap: sizeScale(8),
+  },
+  debugLogType: {
+    fontSize: sizeScale(12),
+    fontWeight: '700',
+  },
+  debugLogTime: {
+    fontSize: sizeScale(11),
+    color: '#666',
+    marginLeft: 'auto',
+  },
+  debugLogMessage: {
+    fontSize: sizeScale(14),
+    color: '#fff',
+    marginBottom: sizeScale(6),
+    lineHeight: sizeScale(20),
+  },
+  debugLogDetails: {
+    fontSize: sizeScale(12),
+    color: '#999',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    backgroundColor: '#0a0a0a',
+    padding: sizeScale(8),
+    borderRadius: sizeScale(4),
+    lineHeight: sizeScale(18),
+  },
+  debugEmpty: {
+    fontSize: sizeScale(14),
+    color: '#666',
+    textAlign: 'center',
+    marginTop: sizeScale(40),
   },
 });
