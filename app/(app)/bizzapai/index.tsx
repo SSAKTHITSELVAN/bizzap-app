@@ -1016,9 +1016,7 @@
 
 
 
-
-
-// app/(app)/bizzapai/index.tsx - WITH DEBUG CONSOLE
+// app/(app)/bizzapai/index.tsx - COMPLETE UPDATED VERSION
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -1117,7 +1115,7 @@ const DebugConsole = ({
       <View style={styles.debugModalOverlay}>
         <View style={styles.debugModalContent}>
           <View style={styles.debugHeader}>
-            <Text style={styles.debugTitle}>🐛 Debug Console</Text>
+            <Text style={styles.debugTitle}>🛠 Debug Console</Text>
             <TouchableOpacity onPress={onClose} style={styles.debugCloseButton}>
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
@@ -1486,6 +1484,7 @@ export default function BizzapAIScreen() {
     addDebugLog('info', '=== STARTING LEAD SUBMISSION ===');
 
     try {
+      // Prepare lead data matching backend API exactly
       const leadData: any = {
         title: aiGeneratedData.title,
         description: aiGeneratedData.description !== 'No description provided'
@@ -1494,6 +1493,7 @@ export default function BizzapAIScreen() {
         quantity: `${aiGeneratedData.quantity} ${aiGeneratedData.unit}`,
       };
 
+      // Optional fields
       if (aiGeneratedData.location && aiGeneratedData.location !== 'Location not specified') {
         leadData.location = aiGeneratedData.location;
       }
@@ -1504,103 +1504,153 @@ export default function BizzapAIScreen() {
 
       addDebugLog('info', 'Lead data prepared', {
         title: leadData.title,
-        descriptionLength: leadData.description?.length,
-        hasLocation: !!leadData.location,
-        hasBudget: !!leadData.budget,
+        description: leadData.description.substring(0, 50) + '...',
+        quantity: leadData.quantity,
+        location: leadData.location || '(not set)',
+        budget: leadData.budget || '(not set)',
       });
 
-      // IMAGE PROCESSING
+      // PROCESS IMAGE - CRITICAL SECTION
       const imageUri = uploadedImage.uri;
-      const fileExtension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = uploadedImage.fileName || 
-                      uploadedImage.name || 
-                      `lead_image_${Date.now()}.${fileExtension}`;
       
-      const mimeTypes: Record<string, string> = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'webp': 'image/webp',
-        'heic': 'image/heic',
-        'heif': 'image/heif',
-      };
-      const mimeType = uploadedImage.type || 
-                      uploadedImage.mimeType || 
-                      mimeTypes[fileExtension] || 
-                      'image/jpeg';
-
-      addDebugLog('info', 'Processing image', {
-        platform: Platform.OS,
-        uriPrefix: imageUri.substring(0, 30) + '...',
-        fileName,
-        mimeType,
-        fileExtension,
-        hasWidth: !!uploadedImage.width,
-        hasHeight: !!uploadedImage.height,
+      addDebugLog('info', 'Raw uploadedImage from picker', {
+        uri: imageUri.substring(0, 60) + '...',
+        fileName: uploadedImage.fileName,
+        type: uploadedImage.type,
+        mimeType: uploadedImage.mimeType,
         width: uploadedImage.width,
         height: uploadedImage.height,
+        fileSize: uploadedImage.fileSize,
       });
 
+      // Get filename
+      let fileName = uploadedImage.fileName;
+      
+      if (!fileName) {
+        // Extract from URI
+        const uriParts = imageUri.split('/');
+        const uriFileName = uriParts[uriParts.length - 1];
+        
+        // Clean up the filename (remove query params if any)
+        fileName = uriFileName.split('?')[0];
+        
+        // If no extension, add .jpg
+        if (!fileName.includes('.')) {
+          fileName = `image_${Date.now()}.jpg`;
+        }
+      }
+
+      // Get MIME type
+      let mimeType = uploadedImage.type || uploadedImage.mimeType;
+      
+      // If mimeType is missing or just "image", determine from filename
+      if (!mimeType || mimeType === 'image') {
+        const extension = fileName.split('.').pop()?.toLowerCase();
+        const mimeMap: Record<string, string> = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'gif': 'image/gif',
+          'webp': 'image/webp',
+          'heic': 'image/heic',
+          'heif': 'image/heif',
+        };
+        mimeType = mimeMap[extension || 'jpg'] || 'image/jpeg';
+      }
+
+      addDebugLog('info', 'Image metadata processed', {
+        fileName,
+        mimeType,
+        platform: Platform.OS,
+      });
+
+      // Create image object based on platform
       if (Platform.OS === 'web') {
+        // Web platform
         try {
-          addDebugLog('info', 'Converting image for web platform');
+          addDebugLog('info', 'Converting to File object for web');
           const response = await fetch(imageUri);
+          if (!response.ok) {
+            throw new Error(`Fetch failed: ${response.status}`);
+          }
           const blob = await response.blob();
           leadData.image = new File([blob], fileName, { type: mimeType });
+          
           addDebugLog('success', 'Web File created', {
             name: leadData.image.name,
             size: leadData.image.size,
             type: leadData.image.type,
           });
         } catch (error: any) {
-          addDebugLog('error', 'Failed to convert image to File', error.message);
-          throw new Error('Failed to process image. Please try again.');
+          addDebugLog('error', 'Failed to create File object', error.message);
+          throw new Error('Failed to process image for upload');
         }
       } else {
-        // Native platform
+        // Native platform (Android/iOS)
+        
+        // React Native FormData expects exactly this format
         leadData.image = {
-          uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
+          uri: imageUri, // Keep original URI with file:// if present
           name: fileName,
           type: mimeType,
         };
+        
         addDebugLog('info', 'Native image object created', {
-          uriPrefix: leadData.image.uri.substring(0, 30) + '...',
-          name: leadData.image.name,
-          type: leadData.image.type,
+          uri: imageUri.substring(0, 60) + '...',
+          name: fileName,
+          type: mimeType,
+          hasFilePrefix: imageUri.startsWith('file://'),
         });
+
+        // Validate the object
+        if (!leadData.image.uri || !leadData.image.name || !leadData.image.type) {
+          addDebugLog('error', 'Image object validation failed', leadData.image);
+          throw new Error('Invalid image data after processing');
+        }
       }
 
       addDebugLog('info', 'Calling leadsAPI.createLead', {
         endpoint: `${Config.API_BASE_URL}/leads`,
-        method: 'POST (multipart/form-data)',
-        hasImage: true,
+        method: 'POST',
+        contentType: 'multipart/form-data',
+        hasTitle: !!leadData.title,
+        hasDescription: !!leadData.description,
+        hasImage: !!leadData.image,
         platform: Platform.OS,
       });
 
+      // Call the API
       const response = await leadsAPI.createLead(leadData);
 
-      addDebugLog('success', 'Lead API Response received', {
+      addDebugLog('success', 'Lead created successfully!', {
         statusCode: response.statusCode,
-        status: response.status,
         message: response.message,
-        hasData: !!response.data,
+        leadId: response.data?.id,
+        imageUrl: response.data?.imageUrl?.substring(0, 60) + '...',
       });
 
       if (response.statusCode === 201) {
-        addDebugLog('success', '=== LEAD SUBMITTED SUCCESSFULLY ===');
+        addDebugLog('success', '=== LEAD SUBMISSION COMPLETE ===');
         
-        Alert.alert('Success', 'Lead created successfully!', [
-          { text: 'OK', onPress: () => router.back() }
+        Alert.alert('Success! 🎉', 'Lead created successfully!', [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              router.back();
+            }
+          }
         ]);
 
+        // Add success message to chat
         const successMessage: Message = {
           id: Date.now().toString(),
-          text: '🎉 Lead submitted successfully!',
+          text: '🎉 Lead submitted successfully! You can view it in the Leads section.',
           isUser: false,
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, successMessage]);
 
+        // Reset state
         setShowPreviewModal(false);
         setAiGeneratedData(null);
         setUploadedImage(null);
@@ -1614,25 +1664,19 @@ export default function BizzapAIScreen() {
         errorCode: error.code,
         responseStatus: error.response?.status,
         responseData: error.response?.data,
-        requestURL: error.config?.url,
-        requestMethod: error.config?.method,
+        requestConfig: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+        },
         isNetworkError: !error.response && !!error.request,
         isTimeout: error.code === 'ECONNABORTED',
       });
       
-      let errorMessage = 'Failed to create lead. Check Debug Console for details.';
+      let errorMessage = error.message || 'Failed to create lead. Please try again.';
       
-      if (error.message?.toLowerCase().includes('network')) {
-        errorMessage = 'Network error: Unable to connect. Check Debug Console.';
-      } else if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Request timeout. Check Debug Console.';
-      } else if (error.response?.status === 413) {
-        errorMessage = 'Image file is too large. Please select a smaller image.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
+      Alert.alert('Error', errorMessage + '\n\nCheck Debug Console for details.');
       
-      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
