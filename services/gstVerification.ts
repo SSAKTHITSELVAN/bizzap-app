@@ -2,9 +2,6 @@
 
 import { Config } from '../constants/config';
 
-const GST_API_KEY = "621e34fe69bb5972a45c7d29854d3b23";
-const GST_BASE_URL = "https://sheet.gstincheck.co.in/check";
-
 export interface GSTAddress {
   flno: string;
   lg: string;
@@ -49,18 +46,23 @@ export interface GSTVerificationResponse {
 
 export const verifyGSTNumber = async (gstin: string): Promise<GSTVerificationResponse> => {
   try {
-    const url = `${GST_BASE_URL}/${GST_API_KEY}/${gstin.toUpperCase()}`;
+    const url = `${Config.GST_BASE_URL}/${Config.GST_API_KEY}/${gstin.toUpperCase()}`;
     
     console.log('🔍 Verifying GST:', gstin);
+    
+    // Create AbortController for timeout (compatible with React Native)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), Config.GST_TIMEOUT_MS);
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
-      // Add timeout
-      signal: AbortSignal.timeout(15000),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -79,7 +81,8 @@ export const verifyGSTNumber = async (gstin: string): Promise<GSTVerificationRes
   } catch (error: any) {
     console.error('❌ GST Verification Error:', error);
     
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+    // Check for abort/timeout errors
+    if (error.name === 'AbortError') {
       return {
         flag: false,
         message: 'Request timed out',

@@ -10,7 +10,8 @@
 │   │   └── [companyId].tsx  # → /particular company
 │   ├── Lead/              # ⭐ Lead section
 │   │   ├── _layout.js       # ⭐ Lead layout
-│   │   ├── [companyId].tsx       # ⭐ specific company details
+│   │   ├── [companyId].tsx  # ⭐ specific company details
+│   │   ├── products.tsx  # ⭐ showing the products
 │   │   └── index.js         # → /lead
 │   │   └── subscriprition.js# → /subscriprition
 │   ├── bizzapai/              # ⭐ bizzapai section

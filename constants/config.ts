@@ -16,7 +16,13 @@ export const Config = {
   // Other config values
   APP_NAME: 'Bizzap',
   VERSION: '1.0.0',
+
+  // GST Verification API Configuration
+  GST_API_KEY: '621e34fe69bb5972a45c7d29854d3b23',
+  GST_BASE_URL: 'https://sheet.gstincheck.co.in/check',
+  GST_TIMEOUT_MS: 15000,
 };
+
 
 // For development, you can detect the environment
 export const isDevelopment = __DEV__;
