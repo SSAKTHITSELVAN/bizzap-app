@@ -10,8 +10,10 @@ import {
   SafeAreaView,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  StatusBar
 } from 'react-native';
+import { Image } from 'expo-image'; // Recommended for SVGs/Images in Expo
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 
@@ -28,23 +30,28 @@ const PhoneEntryPage = () => {
   const handleSendOtp = async () => {
     setError('');
     
-    if (!phoneNumber.trim()) {
+    // Auto-prepend +91 if user just types 10 digits
+    let finalNumber = phoneNumber.trim();
+    if (!finalNumber.startsWith('+') && finalNumber.length === 10) {
+      finalNumber = '+91' + finalNumber;
+    }
+
+    if (!finalNumber) {
       setError('Please enter your phone number');
       return;
     }
 
-    if (!phoneRegex.test(phoneNumber.trim())) {
-      setError('Please enter a valid phone number (e.g., +919876543210)');
+    if (!phoneRegex.test(finalNumber)) {
+      setError('Please enter a valid phone number');
       return;
     }
 
     setLoading(true);
     try {
-      await sendOtp(phoneNumber.trim());
-      // Navigate to OTP verification screen
+      await sendOtp(finalNumber);
       router.push({
         pathname: '/(auth)/otp-verification',
-        params: { phoneNumber: phoneNumber.trim() }
+        params: { phoneNumber: finalNumber }
       });
     } catch (err: any) {
       setError(err.message || 'Failed to send OTP');
@@ -55,55 +62,76 @@ const PhoneEntryPage = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#0B0E11" />
+      
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome to Bizzap</Text>
-            <Text style={styles.subtitle}>Connect your business with opportunities</Text>
-          </View>
-
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              placeholder="+919876543210"
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-              editable={!loading}
-              autoFocus
-            />
-            <Text style={styles.hint}>Include country code (e.g., +91 for India)</Text>
-          </View>
+        <View style={styles.contentContainer}>
           
-          <TouchableOpacity
-            style={[styles.button, (loading || !phoneNumber.trim()) && styles.buttonDisabled]}
-            onPress={handleSendOtp}
-            disabled={loading || !phoneNumber.trim()}
-            activeOpacity={0.7}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Continue</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              We'll send you a verification code to confirm your number
-            </Text>
+          {/* 1. Branding Header */}
+          <View style={styles.brandHeader}>
+            <Text style={styles.brandText}>bizzap</Text>
           </View>
+
+          {/* 2. Illustration Area - Using the provided SVG URL */}
+          <View style={styles.illustrationContainer}>
+            <Image 
+              source={{ uri: "https://image2url.com/images/1765428466632-f867d4de-c2ed-4ff3-b83b-acbc69a597fa.svg" }} 
+              style={styles.illustration}
+              contentFit="contain"
+              transition={1000}
+            />
+          </View>
+
+          {/* 3. Main Form Section */}
+          <View style={styles.formSection}>
+            <Text style={styles.title}>Get started with <Text style={styles.titleHighlight}>Bizzap</Text></Text>
+            <Text style={styles.subtitle}>Enter your phone number to continue</Text>
+
+            {error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
+
+            {/* Input Field Container */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.countryCode}>+91</Text>
+              <View style={styles.verticalDivider} />
+              <TextInput
+                style={styles.input}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="Phone number"
+                placeholderTextColor="#6B7280"
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                editable={!loading}
+                autoFocus={false}
+              />
+            </View>
+          </View>
+
+          {/* 4. Bottom Section (Policy + Button) */}
+          <View style={styles.bottomContainer}>
+            <Text style={styles.policyText}>
+              By continuing, you agree to our <Text style={styles.linkText}>Terms & Privacy Policy</Text>.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSendOtp}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonText}>Send OTP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -115,103 +143,132 @@ export default PhoneEntryPage;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6D28D9',
+    backgroundColor: '#0B0E11', // Dark background matching image
   },
   container: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: 'transparent',
   },
-  card: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 8,
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'space-between',
+    paddingBottom: 20,
   },
-  header: {
+  
+  // Header
+  brandHeader: {
     alignItems: 'center',
+    paddingTop: 40, // Increased padding for better spacing
+  },
+  brandText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+
+  // Illustration
+  illustrationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  illustration: {
+    width: 280, // Slightly larger width for better visibility
+    height: 280,
+  },
+
+  // Form Section
+  formSection: {
+    width: '100%',
     marginBottom: 30,
   },
   title: {
     fontSize: 26,
-    fontWeight: 'bold',
-    color: '#4C1D95',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  titleHighlight: {
+    color: '#A5B4FC', // Light periwinkle highlight for "Bizzap"
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 15,
+    color: '#9CA3AF', // Gray-400
     textAlign: 'center',
+    marginBottom: 32,
   },
-  errorBox: {
-    marginBottom: 20,
-    padding: 12,
-    backgroundColor: '#FEE2E2',
-    borderColor: '#F87171',
+  
+  // Input Styling
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1D21', // Darker input background
+    borderRadius: 12,
     borderWidth: 1,
-    borderRadius: 8,
+    borderColor: '#374151', // Gray border
+    height: 56,
+    paddingHorizontal: 16,
   },
-  errorText: {
-    color: '#B91C1C',
-    fontSize: 14,
-    textAlign: 'center',
+  countryCode: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 8,
+  verticalDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#4B5563', // Divider color
+    marginHorizontal: 12,
   },
   input: {
-    width: '100%',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
+    flex: 1,
+    color: '#FFFFFF',
     fontSize: 16,
+    height: '100%',
+    fontWeight: '500',
   },
-  hint: {
+
+  // Error Message
+  errorText: {
+    color: '#EF4444',
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  // Bottom Footer
+  bottomContainer: {
+    width: '100%',
+    paddingBottom: Platform.OS === 'ios' ? 0 : 20,
+  },
+  policyText: {
     fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  linkText: {
+    color: '#3B82F6', // Link blue
+    fontWeight: '600',
   },
   button: {
     width: '100%',
-    backgroundColor: '#4C1D95',
-    padding: 14,
-    borderRadius: 8,
+    backgroundColor: '#005CE6', // Bright Blue Button
+    height: 54,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
   },
   buttonDisabled: {
-    opacity: 0.5,
+    opacity: 0.6,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    marginTop: 25,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: 15,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
+    fontWeight: '700',
   },
 });
