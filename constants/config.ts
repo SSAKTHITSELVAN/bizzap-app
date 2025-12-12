@@ -18,7 +18,7 @@ export const Config = {
   VERSION: '1.0.0',
 
   // GST Verification API Configuration
-  GST_API_KEY: '621e34fe69bb5972a45c7d29854d3b23',
+  GST_API_KEY: 'ccca20fcf1f863904938f68775e2ebd4',
   GST_BASE_URL: 'https://sheet.gstincheck.co.in/check',
   GST_TIMEOUT_MS: 15000,
 };

@@ -1,4 +1,4 @@
-// app/(auth)/gst-entry.tsx
+// app/(auth)/gst-entry.tsx - UPDATED for new API
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -51,7 +51,9 @@ const GstEntryPage = () => {
 
   // --- Logic ---
 
-  const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  // GST regex - Accepts all valid GSTIN formats
+  // Format: 06AACCG0527D1Z8 or 35AADCD4946L1CO
+  const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}[A-Z]{1}[A-Z0-9]{1}$/;
 
   const handleGstChange = (text: string) => {
     // Auto-capitalize input
@@ -77,13 +79,14 @@ const GstEntryPage = () => {
     setLoading(true);
 
     try {
-      // Verify GST with API
+      // Verify GST with internal API
       const result = await verifyGSTNumber(upperGST);
       
-      if (!result.flag || !result.data) {
+      // Check if request was successful
+      if (result.statusCode !== 200 || result.status !== 'success' || !result.data) {
         setLoading(false);
         setError(result.message || 'Invalid GST Number. Please check and try again.');
-        Alert.alert('Verification Failed', result.error || 'Could not verify GST number.');
+        Alert.alert('Verification Failed', result.errors || result.message || 'Could not verify GST number.');
         return;
       }
 
@@ -111,14 +114,9 @@ const GstEntryPage = () => {
     } catch (err: any) {
       console.error('GST Verification Error:', err);
       setError('Failed to verify GST. Please try again.');
+      Alert.alert('Error', err.message || 'Failed to verify GST. Please try again.');
       setLoading(false);
     }
-  };
-
-  const handleBack = () => {
-    // Optional: Allow going back to correct phone number if absolutely needed, 
-    // otherwise disable as per your original requirements.
-    // router.back(); 
   };
 
   return (
@@ -248,7 +246,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     width: 200,
-    height: 140, // Adjusted aspect ratio for the GST card image
+    height: 140,
   },
 
   // Texts
@@ -265,7 +263,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#9CA3AF', // Gray-400
+    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 10,
@@ -279,10 +277,10 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     height: 56,
-    backgroundColor: '#1A1D21', // Dark Input Background
+    backgroundColor: '#1A1D21',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#3B82F6', // Blue Border (active style from image)
+    borderColor: '#3B82F6',
     color: '#FFFFFF',
     paddingHorizontal: 16,
     fontSize: 16,
@@ -312,7 +310,7 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    backgroundColor: '#005CE6', // Primary Blue
+    backgroundColor: '#005CE6',
     height: 54,
     borderRadius: 10,
     alignItems: 'center',

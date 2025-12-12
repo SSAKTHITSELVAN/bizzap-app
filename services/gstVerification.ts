@@ -1,4 +1,4 @@
-// services/gstVerification.ts
+// services/gstVerification.ts - UPDATED to use internal API
 
 import { Config } from '../constants/config';
 
@@ -37,22 +37,25 @@ export interface GSTData {
 }
 
 export interface GSTVerificationResponse {
-  flag: boolean;
+  statusCode: number;
+  status: string;
   message: string;
   data?: GSTData;
-  error?: string;
-  raw_text?: string;
+  errors?: any;
 }
 
+/**
+ * Verify GST Number using internal API
+ */
 export const verifyGSTNumber = async (gstin: string): Promise<GSTVerificationResponse> => {
   try {
-    const url = `${Config.GST_BASE_URL}/${Config.GST_API_KEY}/${gstin.toUpperCase()}`;
+    const url = `${Config.API_BASE_URL}/auth/gst-details?gstNumber=${gstin.toUpperCase()}`;
     
     console.log('🔍 Verifying GST:', gstin);
     
-    // Create AbortController for timeout (compatible with React Native)
+    // Create AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), Config.GST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), Config.GST_TIMEOUT_MS || 30000);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -71,12 +74,20 @@ export const verifyGSTNumber = async (gstin: string): Promise<GSTVerificationRes
     const result: GSTVerificationResponse = await response.json();
     
     console.log('✅ GST Verification Result:', {
-      flag: result.flag,
+      statusCode: result.statusCode,
+      status: result.status,
       message: result.message,
       hasData: !!result.data,
     });
 
-    return result;
+    // Transform response to match old format for compatibility
+    return {
+      statusCode: result.statusCode,
+      status: result.status,
+      message: result.message,
+      data: result.data,
+      errors: result.errors,
+    };
     
   } catch (error: any) {
     console.error('❌ GST Verification Error:', error);
@@ -84,16 +95,18 @@ export const verifyGSTNumber = async (gstin: string): Promise<GSTVerificationRes
     // Check for abort/timeout errors
     if (error.name === 'AbortError') {
       return {
-        flag: false,
+        statusCode: 408,
+        status: 'error',
         message: 'Request timed out',
-        error: 'Request timed out. Please try again.',
+        errors: 'Request timed out. Please try again.',
       };
     }
     
     return {
-      flag: false,
+      statusCode: 500,
+      status: 'error',
       message: 'Verification failed',
-      error: error.message || 'Failed to verify GST number',
+      errors: error.message || 'Failed to verify GST number',
     };
   }
 };
