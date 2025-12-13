@@ -1,8 +1,12 @@
-// // services/leads.ts
+
+// // services/leads.ts - COMPLETE UPDATED VERSION
 
 // import { apiCall, uploadFile } from './apiClient';
 // import AsyncStorage from '@react-native-async-storage/async-storage';
-// import api from './apiClient'; // Import the axios instance
+// import api from './apiClient';
+// import axios from 'axios';
+// import { Config } from '../constants/config';
+// import { Platform } from 'react-native';
 
 // // --- Interfaces for Leads ---
 
@@ -245,57 +249,146 @@
 
 //   /**
 //    * Create a new lead with optional image upload (auth required)
-//    * FIXED: Uses 'image' key instead of 'file' for multipart upload
+//    * CORRECTED: Matches backend API exactly with proper platform handling
 //    */
 //   createLead: async (data: CreateLeadData): Promise<ApiResponse<Lead>> => {
-//     let response;
-    
-//     if (data.image) {
-//       try {
-//         const formData = new FormData();
-        
-//         // CRITICAL: Append image with key 'image' (backend expects this, not 'file')
-//         formData.append('image', data.image as any);
-        
-//         // Append other required fields
-//         formData.append('title', data.title);
-//         formData.append('description', data.description);
-        
-//         // Append optional fields
-//         if (data.budget) formData.append('budget', data.budget);
-//         if (data.quantity) formData.append('quantity', data.quantity);
-//         if (data.location) formData.append('location', data.location);
-        
-//         console.log('📤 Uploading lead with FormData:', {
-//           title: data.title,
-//           hasImage: true,
-//         });
-        
-//         // Use axios instance directly to bypass uploadFile's 'file' key
-//         const axiosResponse = await api.post('leads', formData, {
+//     try {
+//       console.log('📤 Starting lead creation with image');
+      
+//       // Get auth token
+//       const token = await AsyncStorage.getItem('authToken');
+//       if (!token) {
+//         throw new Error('Authentication token not found. Please login again.');
+//       }
+
+//       // Create FormData
+//       const formData = new FormData();
+      
+//       // Append text fields (all as strings)
+//       formData.append('title', data.title);
+//       formData.append('description', data.description);
+      
+//       // Append optional fields as strings (even empty strings work)
+//       formData.append('budget', data.budget || '');
+//       formData.append('quantity', data.quantity || '');
+//       formData.append('location', data.location || '');
+      
+//       console.log('📝 Text fields added to FormData:', {
+//         title: data.title,
+//         description: data.description,
+//         budget: data.budget || '(empty)',
+//         quantity: data.quantity || '(empty)',
+//         location: data.location || '(empty)',
+//       });
+      
+//       // Handle image
+//       if (data.image) {
+//         if (Platform.OS === 'web') {
+//           // Web: data.image is a File object
+//           console.log('🌐 Web platform: Appending File object');
+//           formData.append('image', data.image);
+//           console.log('✅ Image added:', {
+//             name: data.image.name,
+//             type: data.image.type,
+//             size: data.image.size,
+//           });
+//         } else {
+//           // Native: data.image is {uri, name, type}
+//           console.log('📱 Native platform: Creating image object');
+          
+//           // Validate the image object
+//           if (!data.image.uri || !data.image.name || !data.image.type) {
+//             console.error('❌ Invalid image object:', data.image);
+//             throw new Error('Invalid image data. Missing uri, name, or type.');
+//           }
+          
+//           // For React Native, FormData expects this exact format
+//           const imageFile = {
+//             uri: data.image.uri,
+//             name: data.image.name,
+//             type: data.image.type,
+//           };
+          
+//           console.log('📸 Image object prepared:', imageFile);
+          
+//           // Append as any to avoid TypeScript errors
+//           formData.append('image', imageFile as any);
+//           console.log('✅ Image added to FormData');
+//         }
+//       } else {
+//         console.warn('⚠️ No image provided');
+//         // Send empty value as per API spec
+//         formData.append('image', '');
+//       }
+
+//       console.log('🚀 Sending request to:', `${Config.API_BASE_URL}/leads`);
+//       console.log('🔑 Using auth token:', token ? 'Present' : 'Missing');
+
+//       // Make the API call using axios directly
+//       const response = await axios.post(
+//         `${Config.API_BASE_URL}/leads`,
+//         formData,
+//         {
 //           headers: {
+//             'Accept': '*/*',
+//             'Authorization': `Bearer ${token}`,
 //             'Content-Type': 'multipart/form-data',
 //           },
-//         });
-        
-//         response = axiosResponse.data;
-        
-//       } catch (error: any) {
-//         console.error('❌ Lead creation with image failed:', error);
-//         const errorMessage = error.response?.data?.message || 
-//                             error.message || 
-//                             'Failed to create lead with image';
-//         throw new Error(errorMessage);
-//       }
-//     } else {
-//       // Use regular apiCall for JSON (no image)
-//       response = await apiCall('leads', 'POST', data);
-//     }
+//           timeout: 60000, // 60 seconds
+//         }
+//       );
 
-//     return {
-//       ...response,
-//       data: normalizeLead(response.data),
-//     };
+//       console.log('✅ Lead created successfully:', {
+//         status: response.status,
+//         statusText: response.statusText,
+//         data: response.data,
+//       });
+
+//       return {
+//         ...response.data,
+//         data: normalizeLead(response.data.data),
+//       };
+      
+//     } catch (error: any) {
+//       console.error('❌ Lead creation failed');
+//       console.error('Error details:', {
+//         name: error.name,
+//         message: error.message,
+//         code: error.code,
+//         status: error.response?.status,
+//         statusText: error.response?.statusText,
+//         responseData: error.response?.data,
+//         requestURL: error.config?.url,
+//       });
+      
+//       // Parse error message
+//       let errorMessage = 'Failed to create lead';
+      
+//       if (error.code === 'ECONNREFUSED') {
+//         errorMessage = 'Cannot connect to server. Please check your internet connection.';
+//       } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+//         errorMessage = 'Upload timeout. Image might be too large or connection is slow.';
+//       } else if (error.response) {
+//         const status = error.response.status;
+//         const data = error.response.data;
+        
+//         if (status === 400) {
+//           errorMessage = data?.message || 'Invalid request. Please check all fields.';
+//         } else if (status === 401) {
+//           errorMessage = 'Authentication failed. Please login again.';
+//         } else if (status === 413) {
+//           errorMessage = 'Image file is too large. Maximum size is 10MB.';
+//         } else if (status === 500) {
+//           errorMessage = data?.message || 'Server error. Please try again later.';
+//         } else {
+//           errorMessage = data?.message || `Server error: ${status}`;
+//         }
+//       } else if (error.request) {
+//         errorMessage = 'Network error. Unable to reach server.';
+//       }
+      
+//       throw new Error(errorMessage);
+//     }
 //   },
 
 //   /**
@@ -408,7 +501,7 @@
 //     return apiCall('companies/pay-as-you-go/verify-payment', 'POST', data);
 //   },
 
-//     /**
+//   /**
 //    * Get all consumed leads by the current user (auth required)
 //    */
 //   getConsumedLeads: async (): Promise<ApiResponse<ConsumedLeadResponse[]>> => {
@@ -433,7 +526,6 @@
 //   PayAsYouGoVerifyResponse,
 //   ConsumedLeadResponse
 // };
-
 
 
 // services/leads.ts - COMPLETE UPDATED VERSION
@@ -478,10 +570,20 @@ interface ConsumedLeadResponse {
   companyId: string;
   leadId: string;
   consumedAt: string;
+  dealStatus: 'PENDING' | 'COMPLETED' | 'CANCELLED' | null;
+  dealNotes: string | null;
+  dealValue: string | null;
+  statusUpdatedAt: string | null;
   lead: {
     id: string;
     title: string;
     description: string;
+    imageUrl: string | null;
+    budget: string | null;
+    quantity: string | null;
+    location: string | null;
+    isActive: boolean;
+    createdAt: string;
     company: {
       id: string;
       phoneNumber: string;
@@ -513,14 +615,13 @@ interface Lead {
   updatedAt: string;
   company: Company;
   companyId: string;
-  // Computed property for compatibility
   image?: string | null;
 }
 
 interface CreateLeadData {
   title: string;
   description: string;
-  image?: any; // File object for upload
+  image?: any;
   budget?: string;
   quantity?: string;
   location?: string;
@@ -529,7 +630,7 @@ interface CreateLeadData {
 interface UpdateLeadData {
   title?: string;
   description?: string;
-  image?: any; // File object for upload
+  image?: any;
   budget?: string;
   quantity?: string;
   location?: string;
@@ -546,6 +647,13 @@ interface DeactivateLeadData {
 interface ConsumeLeadResponse {
   success: boolean;
   contact: string;
+}
+
+// NEW: Interface for updating consumed lead status
+interface UpdateConsumedLeadStatusData {
+  dealStatus: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  dealNotes?: string;
+  dealValue?: number;
 }
 
 interface ApiResponse<T> {
@@ -610,7 +718,6 @@ interface PayAsYouGoVerifyResponse {
 
 /**
  * Helper function to normalize lead data
- * Maps imageUrl to image for backward compatibility
  */
 const normalizeLead = (lead: Lead): Lead => ({
   ...lead,
@@ -629,7 +736,6 @@ const normalizeLeads = (leads: Lead[]): Lead[] =>
 export const leadsAPI = {
   /**
    * Get all public active leads (no auth required)
-   * This is the main method for fetching leads
    */
   getAllLeads: async (): Promise<ApiResponse<Lead[]>> => {
     const response = await apiCall('leads/public', 'GET', null, false);
@@ -641,7 +747,6 @@ export const leadsAPI = {
 
   /**
    * @deprecated Use getAllLeads() instead
-   * Kept for backward compatibility
    */
   getAllPublicLeads: async (): Promise<ApiResponse<Lead[]>> => {
     const response = await apiCall('leads/public', 'GET', null, false);
@@ -685,83 +790,51 @@ export const leadsAPI = {
   },
 
   /**
+   * Get ALL user's leads (both active and inactive) - NEW METHOD
+   */
+  getMyLeads: async (): Promise<ApiResponse<Lead[]>> => {
+    const response = await apiCall('leads/my-leads');
+    return {
+      ...response,
+      data: normalizeLeads(response.data),
+    };
+  },
+
+  /**
    * Create a new lead with optional image upload (auth required)
-   * CORRECTED: Matches backend API exactly with proper platform handling
    */
   createLead: async (data: CreateLeadData): Promise<ApiResponse<Lead>> => {
     try {
       console.log('📤 Starting lead creation with image');
       
-      // Get auth token
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
         throw new Error('Authentication token not found. Please login again.');
       }
 
-      // Create FormData
       const formData = new FormData();
       
-      // Append text fields (all as strings)
       formData.append('title', data.title);
       formData.append('description', data.description);
-      
-      // Append optional fields as strings (even empty strings work)
       formData.append('budget', data.budget || '');
       formData.append('quantity', data.quantity || '');
       formData.append('location', data.location || '');
       
-      console.log('📝 Text fields added to FormData:', {
-        title: data.title,
-        description: data.description,
-        budget: data.budget || '(empty)',
-        quantity: data.quantity || '(empty)',
-        location: data.location || '(empty)',
-      });
-      
-      // Handle image
       if (data.image) {
         if (Platform.OS === 'web') {
-          // Web: data.image is a File object
-          console.log('🌐 Web platform: Appending File object');
           formData.append('image', data.image);
-          console.log('✅ Image added:', {
-            name: data.image.name,
-            type: data.image.type,
-            size: data.image.size,
-          });
         } else {
-          // Native: data.image is {uri, name, type}
-          console.log('📱 Native platform: Creating image object');
-          
-          // Validate the image object
-          if (!data.image.uri || !data.image.name || !data.image.type) {
-            console.error('❌ Invalid image object:', data.image);
-            throw new Error('Invalid image data. Missing uri, name, or type.');
-          }
-          
-          // For React Native, FormData expects this exact format
           const imageFile = {
             uri: data.image.uri,
             name: data.image.name,
             type: data.image.type,
           };
-          
-          console.log('📸 Image object prepared:', imageFile);
-          
-          // Append as any to avoid TypeScript errors
           formData.append('image', imageFile as any);
-          console.log('✅ Image added to FormData');
         }
       } else {
-        console.warn('⚠️ No image provided');
-        // Send empty value as per API spec
         formData.append('image', '');
       }
 
-      console.log('🚀 Sending request to:', `${Config.API_BASE_URL}/leads`);
-      console.log('🔑 Using auth token:', token ? 'Present' : 'Missing');
-
-      // Make the API call using axios directly
       const response = await axios.post(
         `${Config.API_BASE_URL}/leads`,
         formData,
@@ -771,15 +844,9 @@ export const leadsAPI = {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',
           },
-          timeout: 60000, // 60 seconds
+          timeout: 60000,
         }
       );
-
-      console.log('✅ Lead created successfully:', {
-        status: response.status,
-        statusText: response.statusText,
-        data: response.data,
-      });
 
       return {
         ...response.data,
@@ -787,18 +854,8 @@ export const leadsAPI = {
       };
       
     } catch (error: any) {
-      console.error('❌ Lead creation failed');
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        code: error.code,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        responseData: error.response?.data,
-        requestURL: error.config?.url,
-      });
+      console.error('❌ Lead creation failed:', error);
       
-      // Parse error message
       let errorMessage = 'Failed to create lead';
       
       if (error.code === 'ECONNREFUSED') {
@@ -835,7 +892,6 @@ export const leadsAPI = {
     let response;
     
     if (data.image) {
-      // Use uploadFile for multipart/form-data
       const formData: Record<string, any> = {};
       
       if (data.title) formData.title = data.title;
@@ -846,7 +902,6 @@ export const leadsAPI = {
       
       response = await uploadFile(`leads/${id}`, data.image, formData);
     } else {
-      // Use regular apiCall for JSON
       response = await apiCall(`leads/${id}`, 'PATCH', data);
     }
 
@@ -886,54 +941,45 @@ export const leadsAPI = {
 
   /**
    * Consume a lead (auth required)
-   * Returns contact information after consuming
    */
   consumeLead: (id: string): Promise<ApiResponse<ConsumeLeadResponse>> => 
     apiCall(`leads/${id}/consume`, 'POST'),
+
+  /**
+   * NEW: Update consumed lead status with deal information
+   */
+  updateConsumedLeadStatus: async (
+    consumedLeadId: string, 
+    data: UpdateConsumedLeadStatusData
+  ): Promise<ApiResponse<ConsumedLeadResponse>> => {
+    return apiCall(`leads/consumed-leads/${consumedLeadId}/status`, 'PATCH', data);
+  },
 };
 
 /**
  * Subscription API calls
  */
 export const subscriptionAPI = {
-  /**
-   * Get current subscription (auth required)
-   */
   getCurrentSubscription: async (): Promise<ApiResponse<CurrentSubscription>> => {
     return apiCall('companies/subscription/current', 'GET');
   },
 
-  /**
-   * Get all available subscription plans (no auth required)
-   */
   getPlans: async (): Promise<ApiResponse<Record<string, SubscriptionPlan>>> => {
     return apiCall('companies/subscription/plans', 'GET', null, false);
   },
 
-  /**
-   * Create subscription order (auth required)
-   */
   createSubscriptionOrder: async (tier: string): Promise<ApiResponse<CreateOrderResponse>> => {
     return apiCall('companies/subscription/create-order', 'POST', { tier });
   },
 
-  /**
-   * Verify subscription payment (auth required)
-   */
   verifySubscriptionPayment: async (data: PaymentVerification): Promise<{ message: string; data: CurrentSubscription }> => {
     return apiCall('companies/subscription/verify-payment', 'POST', data);
   },
 
-  /**
-   * Create pay-as-you-go order (auth required)
-   */
   createPayAsYouGoOrder: async (leadsCount: number): Promise<ApiResponse<CreateOrderResponse>> => {
     return apiCall('companies/pay-as-you-go/create-order', 'POST', { leadsCount });
   },
 
-  /**
-   * Verify pay-as-you-go payment (auth required)
-   */
   verifyPayAsYouGoPayment: async (data: PaymentVerification): Promise<{ message: string; data: PayAsYouGoVerifyResponse }> => {
     return apiCall('companies/pay-as-you-go/verify-payment', 'POST', data);
   },
@@ -961,5 +1007,6 @@ export type {
   CreateOrderResponse,
   PaymentVerification,
   PayAsYouGoVerifyResponse,
-  ConsumedLeadResponse
+  ConsumedLeadResponse,
+  UpdateConsumedLeadStatusData
 };
