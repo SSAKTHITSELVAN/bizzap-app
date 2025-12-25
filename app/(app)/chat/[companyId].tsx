@@ -1,47 +1,63 @@
-// app/(app)/chat/[companyId].tsx - FIXED: Message Order & Keyboard Handling
+// app/(app)/chat/[companyId].tsx
 
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Dimensions,
-  Alert,
-  Modal,
-  Animated,
-  ScrollView,
-  Keyboard,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeft,
-  Send,
-  MoreVertical,
-  Trash2,
-  Edit3,
-  X,
-  Image as ImageIcon,
-  File,
   Check,
-  CheckCheck,
+  Edit3,
+  File,
+  Image as ImageIcon,
   Maximize,
+  Paperclip,
+  Search,
+  Send,
+  Trash2,
+  X
 } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import { chatAPI } from '../../../services/chat-websocket';
-import { companyAPI } from '../../../services/user';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  FlatList,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Config } from '../../../constants/config';
+import { chatAPI, initializeChatSocket, ChatWebSocket } from '../../../services/chat-websocket';
+import { companyAPI } from '../../../services/user';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const sizeScale = (size: number) => (SCREEN_WIDTH / 390) * size;
+
+// Responsive sizing function
+const getResponsiveSize = (size: number) => {
+  const baseWidth = 390;
+  const scale = SCREEN_WIDTH / baseWidth;
+  const newSize = size * scale;
+  return Math.round(newSize);
+};
+
+// Font scaling with limits
+const getFontSize = (size: number) => {
+  const scale = SCREEN_WIDTH / 390;
+  const newSize = size * scale;
+  if (scale < 0.85) return Math.round(size * 0.85);
+  if (scale > 1.15) return Math.round(size * 1.15);
+  return Math.round(newSize);
+};
 
 interface Message {
   id: string;
@@ -60,6 +76,9 @@ interface Message {
   updatedAt: string;
   sender?: any;
   receiver?: any;
+  // Local UI states
+  isPending?: boolean;
+  isError?: boolean;
 }
 
 interface SelectedFile {
@@ -97,7 +116,7 @@ const SuccessToast: React.FC<ToastProps> = ({ message, visible, onDismiss }) => 
     }
   }, [visible, fadeAnim, onDismiss]);
 
-  if (!visible && fadeAnim._value === 0) {
+  if (!visible) {
     return null;
   }
 
@@ -107,7 +126,7 @@ const SuccessToast: React.FC<ToastProps> = ({ message, visible, onDismiss }) => 
       pointerEvents="none"
     >
       <View style={styles.toastContent}>
-        <Check size={sizeScale(20)} color="#fff" />
+        <Check size={getResponsiveSize(20)} color="#fff" />
         <Text style={styles.toastText}>{message}</Text>
       </View>
     </Animated.View>
@@ -118,35 +137,74 @@ export default function ChatScreen() {
   const { companyId } = useLocalSearchParams<{ companyId: string }>();
   const router = useRouter();
   const flatListRef = useRef<FlatList<Message>>(null);
+  const socketRef = useRef<ChatWebSocket | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [partnerInfo, setPartnerInfo] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [fullScreenMedia, setFullScreenMedia] = useState<{ url: string; mimeType: string } | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  // Search State
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Socket Event Handlers ---
+
+  const handleNewMessage = useCallback((newMessage: Message) => {
+    if (newMessage.senderId === companyId || newMessage.receiverId === companyId) {
+      setMessages((prevMessages) => {
+        const exists = prevMessages.some((msg) => msg.id === newMessage.id);
+        if (exists) return prevMessages;
+        return [...prevMessages, newMessage];
+      });
+
+      // Scroll to bottom if not searching
+      if (!isSearching) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    }
+  }, [companyId, isSearching]);
+
+  // --- Filtering Logic ---
+  const filteredMessages = useMemo(() => {
+    if (!isSearching || !searchQuery.trim()) {
+      return messages;
+    }
+    return messages.filter((msg) => {
+      const textMatch = msg.message?.toLowerCase().includes(searchQuery.toLowerCase());
+      const fileMatch = msg.fileName?.toLowerCase().includes(searchQuery.toLowerCase());
+      return textMatch || fileMatch;
+    });
+  }, [messages, isSearching, searchQuery]);
+
+  // --- Effects ---
+
   useEffect(() => {
     if (companyId) {
       fetchCurrentUser();
       fetchPartnerInfo();
       fetchChatHistory();
+      setupSocket();
     }
 
-    // Keyboard listeners
     const keyboardWillShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
+        if (!isSearching) {
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        }
       }
     );
     
@@ -160,11 +218,16 @@ export default function ChatScreen() {
     return () => {
       keyboardWillShowListener.remove();
       keyboardWillHideListener.remove();
+      
+      if (socketRef.current) {
+        socketRef.current.leaveConversation(companyId);
+        socketRef.current.off('newMessage', handleNewMessage);
+      }
     };
   }, [companyId]);
 
   useEffect(() => {
-    if (companyId && messages.length > 0) {
+    if (companyId && messages.length > 0 && currentUserId) {
       const unreadMessages = messages.filter(
         (msg) => msg.receiverId === currentUserId && !msg.isRead
       );
@@ -173,6 +236,20 @@ export default function ChatScreen() {
       }
     }
   }, [messages, currentUserId, companyId]);
+
+  // --- API & Socket Functions ---
+
+  const setupSocket = async () => {
+    try {
+      const socket = await initializeChatSocket();
+      socketRef.current = socket;
+      socket.joinConversation(companyId);
+      socket.off('newMessage', handleNewMessage);
+      socket.on('newMessage', handleNewMessage);
+    } catch (error) {
+      console.error('Failed to initialize chat socket:', error);
+    }
+  };
 
   const fetchCurrentUser = async () => {
     try {
@@ -196,18 +273,12 @@ export default function ChatScreen() {
     try {
       setLoading(true);
       const response = await chatAPI.getChatHistory(companyId);
-      
-      // FIXED: Don't reverse - API returns oldest first, we want newest at bottom
       setMessages(response.data);
-
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
       }, 300);
     } catch (error: any) {
       console.error('Failed to fetch chat history:', error);
-      if (error.response?.status !== 404) {
-        Alert.alert('Error', 'Failed to load chat history');
-      }
     } finally {
       setLoading(false);
     }
@@ -226,43 +297,153 @@ export default function ChatScreen() {
     }
   };
 
+  // --- Navigation Logic ---
+  const handleOpenProfile = () => {
+    if (companyId) {
+      router.push(`/(app)/chat/partner-profile/${companyId}`);
+    }
+  };
+
+  // --- Search Handlers ---
+  const toggleSearch = () => {
+    setIsSearching(true);
+  };
+
+  const cancelSearch = () => {
+    setIsSearching(false);
+    setSearchQuery('');
+    // Scroll back to bottom when search closes
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
+  // --- Send Logic (Optimistic Updates) ---
+
   const sendMessage = async () => {
     if (!inputText.trim() && !editingMessage) return;
 
-    try {
-      setSending(true);
-      const messageText = inputText.trim();
+    const messageText = inputText.trim();
+    setInputText(''); 
 
-      if (editingMessage) {
+    if (editingMessage) {
+      try {
         const response = await chatAPI.editMessage(editingMessage.id, {
           message: messageText,
         });
-
         setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === editingMessage.id ? response.data : msg
-          )
+          prev.map((msg) => (msg.id === editingMessage.id ? response.data : msg))
+        );
+        setEditingMessage(null);
+      } catch (error: any) {
+        Alert.alert('Error', 'Failed to edit message');
+      }
+      return;
+    }
+
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      senderId: currentUserId,
+      receiverId: companyId,
+      message: messageText,
+      messageType: 'text',
+      isRead: false,
+      isEdited: false,
+      isDeleted: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isPending: true,
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+    try {
+      const response = await chatAPI.sendMessage({
+        receiverId: companyId,
+        message: messageText,
+      });
+
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === tempId ? response.data : msg))
+      );
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === tempId ? { ...msg, isError: true, isPending: false } : msg))
+      );
+    }
+  };
+
+  const sendFilesWithMessage = async () => {
+    if (selectedFiles.length === 0) {
+      await sendMessage();
+      return;
+    }
+
+    const messageText = inputText.trim();
+    const filesToSend = [...selectedFiles];
+    
+    setInputText('');
+    setSelectedFiles([]);
+    setSuccessMessage(filesToSend.length > 1 ? 'Files uploading... 📎' : 'File uploading... 📎');
+    setShowSuccessToast(true);
+
+    const tempMessages: Message[] = filesToSend.map((file, index) => ({
+      id: `temp-${Date.now()}-${index}`,
+      senderId: currentUserId,
+      receiverId: companyId,
+      message: index === 0 ? messageText : '',
+      messageType: file.type.startsWith('image/') ? 'image' : 'file',
+      fileUrl: file.uri,
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+      isRead: false,
+      isEdited: false,
+      isDeleted: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isPending: true,
+    }));
+
+    setMessages((prev) => [...prev, ...tempMessages]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+    filesToSend.forEach(async (file, index) => {
+      const tempId = tempMessages[index].id;
+      const textToSend = index === 0 ? messageText : '';
+
+      try {
+        const response = await chatAPI.sendFile(
+          companyId,
+          file,
+          textToSend,
+          (progress) => {
+            console.log(`File ${index} progress: ${progress}`);
+          }
         );
 
-        setEditingMessage(null);
-      } else {
-        const response = await chatAPI.sendMessage({
-          receiverId: companyId,
-          message: messageText,
-        });
-
-        setMessages((prev) => [...prev, response.data]);
-
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === tempId ? response.data : msg))
+        );
+      } catch (error) {
+        console.error(`Failed to send file ${index}:`, error);
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === tempId ? { ...msg, isError: true, isPending: false } : msg))
+        );
       }
+    });
+  };
 
-      setInputText('');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send message');
-    } finally {
-      setSending(false);
+  // --- Input Handlers ---
+
+  const handleSend = async () => {
+    if (selectedFiles.length > 0) {
+      await sendFilesWithMessage();
+    } else {
+      await sendMessage();
     }
   };
 
@@ -274,7 +455,7 @@ export default function ChatScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.8,
       allowsEditing: false,
       allowsMultipleSelection: true,
@@ -288,7 +469,6 @@ export default function ChatScreen() {
         name: asset.fileName || `image_${Date.now()}.jpg`,
         size: asset.fileSize,
       }));
-      
       setSelectedFiles([...selectedFiles, ...newFiles]);
     }
   };
@@ -307,7 +487,6 @@ export default function ChatScreen() {
           name: result.assets[0].name,
           size: result.assets[0].size,
         };
-        
         setSelectedFiles([...selectedFiles, file]);
       }
     } catch (error) {
@@ -319,65 +498,11 @@ export default function ChatScreen() {
     setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
   };
 
-  const sendFilesWithMessage = async () => {
-    if (selectedFiles.length === 0) {
-      await sendMessage();
-      return;
-    }
-
-    try {
-      setSending(true);
-      setUploadProgress(0);
-
-      const messageText = inputText.trim();
-
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
-
-        const response = await chatAPI.sendFile(
-          companyId,
-          file,
-          i === 0 ? messageText : '',
-          (progress) => {
-            const totalProgress = ((i / selectedFiles.length) * 100) + (progress / selectedFiles.length);
-            setUploadProgress(Math.round(totalProgress));
-          }
-        );
-
-        setMessages((prev) => [...prev, response.data]);
-      }
-
-      setInputText('');
-      setSelectedFiles([]);
-      setUploadProgress(0);
-
-      setSuccessMessage(selectedFiles.length > 1 ? 'Files sent! 📎' : 'File sent! 📎');
-      setShowSuccessToast(true);
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    } catch (error: any) {
-      console.error('❌ File send error:', error);
-      Alert.alert('Error', error.message || 'Failed to send files');
-      setUploadProgress(0);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleSend = async () => {
-    if (selectedFiles.length > 0) {
-      await sendFilesWithMessage();
-    } else {
-      await sendMessage();
-    }
-  };
+  // --- Utility ---
 
   const deleteMessage = async (messageId: string) => {
     setShowOptionsModal(false);
-
-    Alert.alert('Delete Message', 'Are you sure you want to delete this message?', [
+    Alert.alert('Delete Message', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -385,24 +510,15 @@ export default function ChatScreen() {
         onPress: async () => {
           try {
             await chatAPI.deleteMessage(messageId);
-
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === messageId
-                  ? {
-                      ...msg,
-                      isDeleted: true,
-                      message: 'This message was deleted.',
-                      fileUrl: undefined,
-                    }
+                  ? { ...msg, isDeleted: true, message: 'This message was deleted.', fileUrl: undefined }
                   : msg
               )
             );
-
-            setSuccessMessage('Message deleted');
-            setShowSuccessToast(true);
           } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to delete message');
+            Alert.alert('Error', 'Failed to delete message');
           }
         },
       },
@@ -435,11 +551,9 @@ export default function ChatScreen() {
 
   const getImageUrl = (fileUrl?: string) => {
     if (!fileUrl) return 'https://via.placeholder.com/150';
-    
-    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    if (fileUrl.startsWith('http') || fileUrl.startsWith('file://') || fileUrl.startsWith('content://')) {
       return fileUrl;
     }
-    
     return `${Config.API_BASE_URL}/${fileUrl}`;
   };
 
@@ -449,115 +563,131 @@ export default function ChatScreen() {
     const isVideo = item.messageType === 'video' || item.mimeType?.startsWith('video/');
     const isFile = item.messageType === 'file' || item.messageType === 'document' || (!isImage && !isVideo && item.fileUrl);
 
+    // Styling for pending/error messages
+    const containerOpacity = item.isPending ? 0.6 : 1;
+    const hasError = item.isError;
+
     return (
-      <TouchableOpacity
-        style={[
-          styles.messageContainer,
-          isOwnMessage ? styles.ownMessage : styles.partnerMessage,
-        ]}
-        onLongPress={() => {
-          if (isOwnMessage && !item.isDeleted) {
-            setSelectedMessage(item);
-            setShowOptionsModal(true);
-          }
-        }}
-        onPress={() => {
-          if ((isImage || isVideo) && item.fileUrl && item.mimeType) {
-            handleMediaPress(item.fileUrl, item.mimeType);
-          }
-        }}
-        delayLongPress={500}
-        activeOpacity={isImage || isVideo ? 0.7 : 1}
-      >
-        {item.isDeleted ? (
-          <View style={styles.deletedMessage}>
-            <Trash2 size={sizeScale(14)} color="#9CA3AF" style={{ marginRight: sizeScale(4) }} />
-            <Text style={styles.deletedText}>Message deleted</Text>
-          </View>
-        ) : (
-          <>
-            {(isImage || isVideo) && item.fileUrl && (
-              <View style={styles.mediaWrapper}>
-                <Image
-                  source={{ uri: getImageUrl(item.fileUrl) }}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.mediaOverlay}>
-                  <Maximize size={sizeScale(24)} color="#FFFFFF" />
-                  {isVideo && <Text style={styles.videoLabel}>VIDEO</Text>}
-                </View>
+      <View style={[styles.messageWrapper, { opacity: containerOpacity }]}>
+        <View style={styles.messageRow}>
+          {!isOwnMessage && (
+            <Image
+              source={{ uri: getImageUrl(partnerInfo?.logo) || 'https://via.placeholder.com/40' }}
+              style={styles.senderAvatar}
+            />
+          )}
+
+          <View style={{ flex: 1 }}>
+            {!isOwnMessage && (
+              <View style={styles.senderNameWrapper}>
+                <Text style={styles.senderName}>{partnerInfo?.companyName || 'Partner'}</Text>
               </View>
             )}
 
-            {isFile && item.fileUrl && (
-              <TouchableOpacity
-                style={styles.fileContainer}
-                onPress={() => {
-                  Alert.alert('File', `Open ${item.fileName || 'file'}`);
-                }}
-              >
-                <File size={sizeScale(32)} color="#3B82F6" />
-                <View style={styles.fileInfo}>
-                  <Text style={styles.fileName} numberOfLines={1}>
-                    {item.fileName || 'Document'}
-                  </Text>
-                  {item.fileSize && (
-                    <Text style={styles.fileSize}>
-                      {(item.fileSize / 1024 / 1024).toFixed(2)} MB
+            <TouchableOpacity
+              style={[
+                styles.messageContainer,
+                isOwnMessage ? styles.ownMessage : styles.partnerMessage,
+                hasError && { borderColor: '#EF4444', borderWidth: 1 }
+              ]}
+              onLongPress={() => {
+                if (isOwnMessage && !item.isDeleted && !item.isPending) {
+                  setSelectedMessage(item);
+                  setShowOptionsModal(true);
+                }
+              }}
+              onPress={() => {
+                if ((isImage || isVideo) && item.fileUrl && item.mimeType) {
+                  handleMediaPress(item.fileUrl, item.mimeType);
+                }
+              }}
+              delayLongPress={500}
+              activeOpacity={isImage || isVideo ? 0.7 : 1}
+            >
+              {item.isDeleted ? (
+                <View style={styles.deletedMessage}>
+                  <Trash2 size={getResponsiveSize(14)} color="#9CA3AF" style={{ marginRight: getResponsiveSize(4) }} />
+                  <Text style={styles.deletedText}>Message deleted</Text>
+                </View>
+              ) : (
+                <>
+                  {(isImage || isVideo) && item.fileUrl && (
+                    <View style={styles.mediaWrapper}>
+                      <Image
+                        source={{ uri: getImageUrl(item.fileUrl) }}
+                        style={styles.messageImage}
+                        resizeMode="cover"
+                      />
+                      {item.isPending && (
+                        <View style={styles.pendingOverlay}>
+                          <ActivityIndicator size="small" color="#FFF" />
+                        </View>
+                      )}
+                      <View style={styles.mediaOverlay}>
+                        {!item.isPending && <Maximize size={getResponsiveSize(24)} color="#FFFFFF" />}
+                        {isVideo && <Text style={styles.videoLabel}>VIDEO</Text>}
+                      </View>
+                    </View>
+                  )}
+
+                  {isFile && item.fileUrl && (
+                    <View style={styles.fileContainer}>
+                      {item.isPending ? (
+                         <ActivityIndicator size="small" color="#3B82F6" />
+                      ) : (
+                         <File size={getResponsiveSize(32)} color="#3B82F6" />
+                      )}
+                      <View style={styles.fileInfo}>
+                        <Text style={styles.fileName} numberOfLines={1}>
+                          {item.fileName || 'Document'}
+                        </Text>
+                        {item.fileSize && (
+                          <Text style={styles.fileSize}>
+                            {(item.fileSize / 1024 / 1024).toFixed(2)} MB
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {item.message && (
+                    <Text
+                      style={[
+                        styles.messageText,
+                        isOwnMessage ? styles.ownMessageText : styles.partnerMessageText,
+                      ]}
+                    >
+                      {item.message}
                     </Text>
                   )}
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {item.message && (
-              <Text
-                style={[
-                  styles.messageText,
-                  isOwnMessage ? styles.ownMessageText : styles.partnerMessageText,
-                ]}
-              >
-                {item.message}
-              </Text>
-            )}
-
-            <View style={styles.messageFooter}>
-              <Text
-                style={[
-                  styles.messageTime,
-                  isOwnMessage ? styles.ownMessageTime : styles.partnerMessageTime,
-                ]}
-              >
-                {new Date(item.createdAt).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
-              {item.isEdited && (
-                <Text
-                  style={[
-                    styles.editedLabel,
-                    isOwnMessage ? styles.ownMessageTime : styles.partnerMessageTime,
-                  ]}
-                >
-                  {' '}
-                  · Edited
-                </Text>
-              )}
-              {isOwnMessage && (
-                <View style={styles.readReceiptContainer}>
-                  {item.isRead ? (
-                    <CheckCheck size={sizeScale(14)} color="#3B82F6" strokeWidth={2.5} />
-                  ) : (
-                    <Check size={sizeScale(14)} color="rgba(255, 255, 255, 0.5)" strokeWidth={2.5} />
+                  
+                  {hasError && (
+                    <Text style={{color: '#EF4444', fontSize: 10, marginTop: 4}}>Failed to send</Text>
                   )}
-                </View>
+                </>
               )}
-            </View>
-          </>
-        )}
-      </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
+
+          {isOwnMessage && (
+             <View style={{ width: getResponsiveSize(16), alignItems: 'center' }}>
+             </View>
+          )}
+        </View>
+
+        <View style={[styles.messageTimeWrapper, isOwnMessage && styles.ownMessageTimeWrapper]}>
+          <Text style={styles.messageTime}>
+            {new Date(item.createdAt).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            })}
+          </Text>
+          {item.isPending && !hasError && (
+              <Text style={styles.sendingText}> • Sending...</Text>
+          )}
+        </View>
+      </View>
     );
   };
 
@@ -578,57 +708,105 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
-            <ArrowLeft size={sizeScale(24)} color="#FFFFFF" />
-          </TouchableOpacity>
+        {/* HEADER: Dynamic rendering based on Search Mode */}
+        {isSearching ? (
+          <View style={styles.headerSearchContainer}>
+            <TouchableOpacity 
+              onPress={cancelSearch} 
+              style={styles.backButton} 
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={getResponsiveSize(18)} color="#8FA8CC" strokeWidth={2.5} />
+            </TouchableOpacity>
 
-          <View style={styles.headerCenter}>
-            <Image
-              source={{
-                uri: getImageUrl(partnerInfo?.logo) || 'https://via.placeholder.com/40',
-              }}
-              style={styles.headerAvatar}
+            <TextInput
+              style={styles.headerSearchInput}
+              placeholder="Search messages..."
+              placeholderTextColor="#8EA8CC"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus={true}
+              returnKeyType="search"
             />
-            <View style={styles.headerInfo}>
+
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchButton}>
+                <X size={getResponsiveSize(18)} color="#8FA8CC" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
+              <View style={styles.backIconWrapper}>
+                <ArrowLeft size={getResponsiveSize(18)} color="#8FA8CC" strokeWidth={2.5} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Clickable Header for Profile */}
+            <TouchableOpacity 
+              style={styles.headerCenter} 
+              activeOpacity={0.7} 
+              onPress={handleOpenProfile}
+            >
+              <Image
+                source={{
+                  uri: getImageUrl(partnerInfo?.logo) || 'https://via.placeholder.com/32',
+                }}
+                style={styles.headerAvatar}
+              />
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {partnerInfo?.companyName || 'Chat Partner'}
               </Text>
-              <Text style={styles.headerStatus}>Last seen recently</Text>
+            </TouchableOpacity>
+
+            <View style={styles.headerRight}>
+              <TouchableOpacity 
+                style={styles.searchButton} 
+                activeOpacity={0.7}
+                onPress={toggleSearch}
+              >
+                <Search size={getResponsiveSize(24)} color="#8FA8CC" />
+              </TouchableOpacity>
+              <View style={styles.moreOptionsPlaceholder} />
             </View>
           </View>
+        )}
 
-          <TouchableOpacity
-            onPress={() => {}}
-            style={styles.moreOptionsButton}
-            activeOpacity={0.7}
-          >
-            <MoreVertical size={sizeScale(24)} color="#FFFFFF" />
-          </TouchableOpacity>
+        {/* TODAY SEPARATOR */}
+        <View style={styles.todaySeparator}>
+          <Text style={styles.todayText}>Today</Text>
         </View>
 
-        {/* CHAT MESSAGES LIST - FIXED: inverted={false} so oldest is top, newest is bottom */}
+        {/* CHAT MESSAGES LIST */}
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={filteredMessages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messageList}
           inverted={false}
           onContentSizeChange={() => {
-            setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+             // Only scroll if not searching/filtering
+             if (!isSearching) {
+               flatListRef.current?.scrollToEnd({ animated: true });
+             }
           }}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            isSearching && searchQuery.length > 0 ? (
+              <View style={styles.emptySearchContainer}>
+                 <Text style={styles.emptySearchText}>No messages found for "{searchQuery}"</Text>
+              </View>
+            ) : null
+          }
         />
 
         {/* EDITING BAR */}
         {editingMessage && (
           <View style={styles.editingBar}>
             <View style={styles.editingBarIcon}>
-              <Edit3 size={sizeScale(16)} color="#FFFFFF" />
+              <Edit3 size={getResponsiveSize(16)} color="#FFFFFF" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.editingTitle}>Editing Message</Text>
@@ -637,7 +815,7 @@ export default function ChatScreen() {
               </Text>
             </View>
             <TouchableOpacity onPress={cancelEdit} activeOpacity={0.7}>
-              <X size={sizeScale(20)} color="#FFFFFF" />
+              <X size={getResponsiveSize(20)} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -656,7 +834,7 @@ export default function ChatScreen() {
                     <Image source={{ uri: file.uri }} style={styles.selectedFileImage} />
                   ) : (
                     <View style={styles.selectedFileIcon}>
-                      <File size={sizeScale(24)} color="#3B82F6" />
+                      <File size={getResponsiveSize(24)} color="#3B82F6" />
                     </View>
                   )}
                   <TouchableOpacity
@@ -664,7 +842,7 @@ export default function ChatScreen() {
                     onPress={() => removeSelectedFile(index)}
                     activeOpacity={0.7}
                   >
-                    <X size={sizeScale(16)} color="#FFFFFF" />
+                    <X size={getResponsiveSize(16)} color="#FFFFFF" />
                   </TouchableOpacity>
                   <Text style={styles.selectedFileName} numberOfLines={1}>
                     {file.name}
@@ -675,58 +853,46 @@ export default function ChatScreen() {
           </View>
         )}
 
-        {/* UPLOAD PROGRESS BAR */}
-        {uploadProgress > 0 && uploadProgress < 100 && (
-          <View style={styles.uploadProgressContainer}>
-            <View style={[styles.uploadProgressBar, { width: `${uploadProgress}%` }]} />
-            <Text style={styles.uploadProgressText}>Uploading: {uploadProgress}%</Text>
+        {/* INPUT CONTAINER (WhatsApp Style) - Hidden when searching for better UX */}
+        {!isSearching && (
+          <View style={styles.inputContainer}>
+            <View style={styles.inputCapsule}>
+              <TextInput
+                style={styles.input}
+                placeholder={editingMessage ? 'Edit your message...' : 'Message'}
+                placeholderTextColor="#9CA3AF"
+                value={inputText}
+                onChangeText={setInputText}
+                multiline={true}
+                textAlignVertical="center"
+                editable={true}
+              />
+              
+              <View style={styles.inputActions}>
+                <TouchableOpacity onPress={pickDocument} style={styles.iconButton}>
+                  <Paperclip size={getResponsiveSize(20)} color="#9CA3AF" style={{transform: [{rotate: '45deg'}]}} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity onPress={pickImage} style={[styles.iconButton, {marginLeft: 8}]}>
+                  <ImageIcon size={getResponsiveSize(20)} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleSend}
+              style={[
+                styles.sendFab,
+                (!inputText.trim() && selectedFiles.length === 0 && !editingMessage) ? styles.sendFabDisabled : null
+              ]}
+              disabled={(!inputText.trim() && selectedFiles.length === 0 && !editingMessage)}
+              activeOpacity={0.8}
+            >
+              <Send size={getResponsiveSize(20)} color="#FFFFFF" style={{marginLeft: 2}} />
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* MESSAGE INPUT - FIXED: Proper padding and positioning */}
-        <View style={styles.inputContainer}>
-          <TouchableOpacity 
-            onPress={pickImage} 
-            style={styles.attachmentButton} 
-            activeOpacity={0.7}
-            disabled={sending}
-          >
-            <ImageIcon size={sizeScale(20)} color={sending ? "#666" : "#FFFFFF"} />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={pickDocument} 
-            style={styles.attachmentButton} 
-            activeOpacity={0.7}
-            disabled={sending}
-          >
-            <File size={sizeScale(20)} color={sending ? "#666" : "#FFFFFF"} />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            placeholder={editingMessage ? 'Edit your message...' : 'Type a message...'}
-            placeholderTextColor="#9CA3AF"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline={true}
-            returnKeyType="default"
-            editable={!sending}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            style={[
-              styles.sendButton, 
-              (!inputText.trim() && selectedFiles.length === 0 && !editingMessage) && styles.sendButtonDisabled
-            ]}
-            disabled={(!inputText.trim() && selectedFiles.length === 0 && !editingMessage) || sending}
-            activeOpacity={0.7}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Send size={sizeScale(20)} color="#FFFFFF" />
-            )}
-          </TouchableOpacity>
-        </View>
       </KeyboardAvoidingView>
 
       {/* OPTIONS MODAL */}
@@ -753,7 +919,7 @@ export default function ChatScreen() {
                   onPress={() => selectedMessage && startEdit(selectedMessage)}
                 >
                   <View style={styles.optionIconContainer}>
-                    <Edit3 size={sizeScale(20)} color="#3B82F6" />
+                    <Edit3 size={getResponsiveSize(20)} color="#3B82F6" />
                   </View>
                   <View style={styles.optionTextContainer}>
                     <Text style={styles.optionText}>Edit Message</Text>
@@ -769,7 +935,7 @@ export default function ChatScreen() {
               onPress={() => selectedMessage && deleteMessage(selectedMessage.id)}
             >
               <View style={styles.optionIconContainer}>
-                <Trash2 size={sizeScale(20)} color="#EF4444" />
+                <Trash2 size={getResponsiveSize(20)} color="#EF4444" />
               </View>
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionText, styles.deleteText]}>Delete Message</Text>
@@ -793,7 +959,7 @@ export default function ChatScreen() {
             onPress={closeFullScreenViewer}
             activeOpacity={0.7}
           >
-            <X size={sizeScale(28)} color="#FFFFFF" />
+            <X size={getResponsiveSize(28)} color="#FFFFFF" />
           </TouchableOpacity>
 
           {fullScreenMedia?.url && (
@@ -829,70 +995,146 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: sizeScale(16),
-    paddingVertical: sizeScale(12),
-    borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
-    backgroundColor: '#111827',
+    justifyContent: 'space-between',
+    paddingHorizontal: getResponsiveSize(16),
+    paddingTop: getResponsiveSize(16),
+    paddingBottom: getResponsiveSize(8),
+    backgroundColor: '#0F1623',
+    height: getResponsiveSize(64),
+  },
+  headerSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: getResponsiveSize(16),
+    paddingTop: getResponsiveSize(16),
+    paddingBottom: getResponsiveSize(8),
+    backgroundColor: '#0F1623',
+    height: getResponsiveSize(64),
+    gap: getResponsiveSize(10),
+  },
+  headerSearchInput: {
+    flex: 1,
+    backgroundColor: '#1F2937',
+    borderRadius: getResponsiveSize(8),
+    paddingVertical: getResponsiveSize(8),
+    paddingHorizontal: getResponsiveSize(12),
+    color: '#FFFFFF',
+    fontSize: getFontSize(16),
+  },
+  clearSearchButton: {
+    padding: getResponsiveSize(8),
   },
   backButton: {
-    padding: sizeScale(4),
-    marginRight: sizeScale(12),
+    width: getResponsiveSize(40),
+    height: getResponsiveSize(40),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backIconWrapper: {
+    width: getResponsiveSize(24),
+    height: getResponsiveSize(24),
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerCenter: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveSize(8),
   },
   headerAvatar: {
-    width: sizeScale(40),
-    height: sizeScale(40),
-    borderRadius: sizeScale(20),
+    width: getResponsiveSize(32),
+    height: getResponsiveSize(32),
+    borderRadius: getResponsiveSize(16),
     backgroundColor: '#374151',
-    marginRight: sizeScale(12),
-    borderWidth: 1.5,
-    borderColor: '#3B82F6',
-  },
-  headerInfo: {
-    flex: 1,
   },
   headerTitle: {
-    fontSize: sizeScale(16),
+    fontSize: getFontSize(18),
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: sizeScale(2),
+    textAlign: 'center',
   },
-  headerStatus: {
-    fontSize: sizeScale(12),
-    color: '#9CA3AF',
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveSize(12),
+    minWidth: getResponsiveSize(60),
+    justifyContent: 'flex-end',
   },
-  moreOptionsButton: {
-    padding: sizeScale(4),
-    marginLeft: sizeScale(12),
+  searchButton: {
+    width: getResponsiveSize(40),
+    height: getResponsiveSize(40),
+    borderRadius: getResponsiveSize(8),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreOptionsPlaceholder: {
+    width: getResponsiveSize(12),
+  },
+  todaySeparator: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: getResponsiveSize(8),
+    paddingHorizontal: getResponsiveSize(16),
+  },
+  todayText: {
+    color: '#FFFFFF',
+    fontSize: getFontSize(14),
+    fontWeight: '600',
+    lineHeight: getFontSize(24),
   },
   messageList: {
-    paddingHorizontal: sizeScale(12),
-    paddingVertical: sizeScale(12),
-    paddingBottom: sizeScale(20),
+    paddingHorizontal: getResponsiveSize(16),
+    paddingVertical: getResponsiveSize(16),
+    paddingBottom: getResponsiveSize(20),
+  },
+  emptySearchContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: getResponsiveSize(40),
+  },
+  emptySearchText: {
+    color: '#8EA8CC',
+    fontSize: getFontSize(16),
+  },
+  messageWrapper: {
+    marginVertical: getResponsiveSize(8),
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: getResponsiveSize(12),
+  },
+  senderAvatar: {
+    width: getResponsiveSize(40),
+    height: getResponsiveSize(40),
+    borderRadius: getResponsiveSize(20),
+    backgroundColor: '#374151',
+  },
+  senderNameWrapper: {
+    marginBottom: getResponsiveSize(4),
+  },
+  senderName: {
+    fontSize: getFontSize(13),
+    color: '#8EA8CC',
+    lineHeight: getFontSize(20),
   },
   messageContainer: {
-    maxWidth: '80%',
-    padding: sizeScale(10),
-    borderRadius: sizeScale(12),
-    marginVertical: sizeScale(4),
+    maxWidth: '100%',
+    padding: getResponsiveSize(12),
+    borderRadius: getResponsiveSize(12),
   },
   ownMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#003E9C',
   },
   partnerMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#1F2937',
+    backgroundColor: '#0F1417',
   },
   messageText: {
-    fontSize: sizeScale(15),
-    lineHeight: sizeScale(20),
-    marginBottom: sizeScale(4),
+    fontSize: getFontSize(16),
+    lineHeight: getFontSize(24),
     color: '#FFFFFF',
   },
   ownMessageText: {
@@ -901,17 +1143,37 @@ const styles = StyleSheet.create({
   partnerMessageText: {
     color: '#FFFFFF',
   },
+  messageTimeWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: getResponsiveSize(52),
+    paddingTop: getResponsiveSize(4),
+  },
+  ownMessageTimeWrapper: {
+    paddingLeft: 0,
+    paddingRight: getResponsiveSize(52),
+    justifyContent: 'flex-end',
+  },
+  messageTime: {
+    fontSize: getFontSize(14),
+    color: '#8EA8CC',
+    lineHeight: getFontSize(21),
+  },
+  sendingText: {
+    fontSize: getFontSize(12),
+    color: '#8EA8CC',
+    fontStyle: 'italic',
+  },
   messageImage: {
-    width: sizeScale(200),
-    height: sizeScale(150),
-    borderRadius: sizeScale(10),
-    marginBottom: sizeScale(4),
+    width: getResponsiveSize(200),
+    height: getResponsiveSize(150),
+    borderRadius: getResponsiveSize(10),
   },
   mediaWrapper: {
-    borderRadius: sizeScale(10),
+    borderRadius: getResponsiveSize(10),
     overflow: 'hidden',
     position: 'relative',
-    marginBottom: sizeScale(4),
+    marginBottom: getResponsiveSize(4),
   },
   mediaOverlay: {
     position: 'absolute',
@@ -919,224 +1181,207 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.1)', // lighter overlay
     justifyContent: 'center',
     alignItems: 'center',
   },
+  pendingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
   videoLabel: {
     color: '#FFFFFF',
-    fontSize: sizeScale(12),
+    fontSize: getFontSize(12),
     fontWeight: '700',
-    marginTop: sizeScale(4),
+    marginTop: getResponsiveSize(4),
     letterSpacing: 1,
   },
   fileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: sizeScale(8),
-    padding: sizeScale(10),
-    marginBottom: sizeScale(4),
+    borderRadius: getResponsiveSize(8),
+    padding: getResponsiveSize(10),
+    marginBottom: getResponsiveSize(4),
   },
   fileInfo: {
-    marginLeft: sizeScale(10),
+    marginLeft: getResponsiveSize(10),
     flexShrink: 1,
   },
   fileName: {
-    fontSize: sizeScale(14),
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#FFFFFF',
-    marginBottom: sizeScale(2),
+    marginBottom: getResponsiveSize(2),
   },
   fileSize: {
-    fontSize: sizeScale(12),
+    fontSize: getFontSize(12),
     color: '#9CA3AF',
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  messageTime: {
-    fontSize: sizeScale(11),
-  },
-  ownMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  partnerMessageTime: {
-    color: '#9CA3AF',
-  },
-  editedLabel: {
-    fontSize: sizeScale(11),
-    marginLeft: sizeScale(4),
-    fontStyle: 'italic',
-  },
-  readReceiptContainer: {
-    marginLeft: sizeScale(4),
   },
   deletedMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: sizeScale(4),
+    padding: getResponsiveSize(4),
   },
   deletedText: {
     color: '#9CA3AF',
     fontStyle: 'italic',
-    fontSize: sizeScale(13),
+    fontSize: getFontSize(13),
   },
   selectedFilesContainer: {
     backgroundColor: '#1F2937',
     borderTopWidth: 1,
     borderTopColor: '#374151',
-    paddingVertical: sizeScale(8),
+    paddingVertical: getResponsiveSize(8),
   },
   selectedFilesScroll: {
-    paddingHorizontal: sizeScale(12),
-    gap: sizeScale(8),
+    paddingHorizontal: getResponsiveSize(12),
+    gap: getResponsiveSize(8),
   },
   selectedFileItem: {
-    width: sizeScale(80),
+    width: getResponsiveSize(80),
     alignItems: 'center',
   },
   selectedFileImage: {
-    width: sizeScale(80),
-    height: sizeScale(80),
-    borderRadius: sizeScale(8),
+    width: getResponsiveSize(80),
+    height: getResponsiveSize(80),
+    borderRadius: getResponsiveSize(8),
     backgroundColor: '#374151',
   },
   selectedFileIcon: {
-    width: sizeScale(80),
-    height: sizeScale(80),
-    borderRadius: sizeScale(8),
+    width: getResponsiveSize(80),
+    height: getResponsiveSize(80),
+    borderRadius: getResponsiveSize(8),
     backgroundColor: '#374151',
     justifyContent: 'center',
     alignItems: 'center',
   },
   removeFileButton: {
     position: 'absolute',
-    top: sizeScale(-6),
-    right: sizeScale(-6),
+    top: getResponsiveSize(-6),
+    right: getResponsiveSize(-6),
     backgroundColor: '#EF4444',
-    borderRadius: sizeScale(12),
-    width: sizeScale(24),
-    height: sizeScale(24),
+    borderRadius: getResponsiveSize(12),
+    width: getResponsiveSize(24),
+    height: getResponsiveSize(24),
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedFileName: {
-    fontSize: sizeScale(10),
+    fontSize: getFontSize(10),
     color: '#9CA3AF',
-    marginTop: sizeScale(4),
+    marginTop: getResponsiveSize(4),
     textAlign: 'center',
   },
+  
+  // WHATSAPP STYLE INPUT STYLES
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: sizeScale(16),
-    paddingTop: sizeScale(10),
-    paddingBottom: Platform.OS === 'ios' ? sizeScale(30) : sizeScale(90),
-    borderTopWidth: 1,
-    borderTopColor: '#1F2937',
+    paddingHorizontal: getResponsiveSize(10),
+    paddingTop: getResponsiveSize(10),
+    paddingBottom: Platform.OS === 'ios' ? getResponsiveSize(90) : getResponsiveSize(80), 
     backgroundColor: '#000000',
+  },
+  inputCapsule: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#1F2937',
+    borderRadius: getResponsiveSize(24),
+    paddingHorizontal: getResponsiveSize(12),
+    paddingVertical: getResponsiveSize(8),
+    marginRight: getResponsiveSize(8),
+    minHeight: getResponsiveSize(48),
+    maxHeight: getResponsiveSize(120),
   },
   input: {
     flex: 1,
-    maxHeight: sizeScale(100),
-    backgroundColor: '#1F2937',
-    borderRadius: sizeScale(20),
-    paddingHorizontal: sizeScale(16),
-    paddingVertical: sizeScale(10),
-    fontSize: sizeScale(15),
+    fontSize: getFontSize(16),
     color: '#FFFFFF',
-    marginHorizontal: sizeScale(8),
+    paddingTop: Platform.OS === 'ios' ? 6 : 0,
+    paddingBottom: Platform.OS === 'ios' ? 6 : 0,
+    marginRight: getResponsiveSize(8),
+    maxHeight: getResponsiveSize(100),
   },
-  attachmentButton: {
-    padding: sizeScale(8),
+  inputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: getResponsiveSize(4),
+  },
+  iconButton: {
+    padding: getResponsiveSize(4),
+  },
+  sendFab: {
+    width: getResponsiveSize(48),
+    height: getResponsiveSize(48),
+    borderRadius: getResponsiveSize(24),
+    backgroundColor: '#0057D9',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 0,
   },
-  sendButton: {
-    backgroundColor: '#3B82F6',
-    width: sizeScale(40),
-    height: sizeScale(40),
-    borderRadius: sizeScale(20),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
+  sendFabDisabled: {
     backgroundColor: '#374151',
-    opacity: 0.5,
+    opacity: 0.7,
   },
+  
   editingBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: sizeScale(16),
-    paddingVertical: sizeScale(10),
+    paddingHorizontal: getResponsiveSize(16),
+    paddingVertical: getResponsiveSize(10),
     backgroundColor: '#1F2937',
-    gap: sizeScale(10),
+    gap: getResponsiveSize(10),
     borderTopWidth: 2,
     borderTopColor: '#3B82F6',
   },
   editingBarIcon: {
-    padding: sizeScale(6),
+    padding: getResponsiveSize(6),
     backgroundColor: '#3B82F6',
-    borderRadius: sizeScale(6),
+    borderRadius: getResponsiveSize(6),
   },
   editingTitle: {
-    fontSize: sizeScale(12),
+    fontSize: getFontSize(12),
     fontWeight: '700',
     color: '#3B82F6',
-    marginBottom: sizeScale(2),
+    marginBottom: getResponsiveSize(2),
   },
   editingText: {
-    fontSize: sizeScale(14),
+    fontSize: getFontSize(14),
     color: '#9CA3AF',
-  },
-  uploadProgressContainer: {
-    height: sizeScale(24),
-    backgroundColor: '#1F2937',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  uploadProgressBar: {
-    height: '100%',
-    backgroundColor: '#3B82F6',
-    position: 'absolute',
-    left: 0,
-    top: 0,
-  },
-  uploadProgressText: {
-    color: '#FFFFFF',
-    fontSize: sizeScale(12),
-    fontWeight: '600',
-    textAlign: 'center',
-    zIndex: 1,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: sizeScale(20),
+    padding: getResponsiveSize(20),
   },
   optionsModal: {
     backgroundColor: '#111827',
-    borderRadius: sizeScale(16),
+    borderRadius: getResponsiveSize(16),
     width: '100%',
-    maxWidth: sizeScale(340),
+    maxWidth: getResponsiveSize(340),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#374151',
   },
   optionsHeader: {
-    padding: sizeScale(16),
+    padding: getResponsiveSize(16),
     borderBottomWidth: 1,
     borderBottomColor: '#374151',
     backgroundColor: '#1F2937',
   },
   optionsTitle: {
-    fontSize: sizeScale(18),
+    fontSize: getFontSize(18),
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
@@ -1144,34 +1389,34 @@ const styles = StyleSheet.create({
   optionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: sizeScale(16),
+    padding: getResponsiveSize(16),
   },
   optionIconContainer: {
-    width: sizeScale(44),
-    height: sizeScale(44),
-    borderRadius: sizeScale(22),
+    width: getResponsiveSize(44),
+    height: getResponsiveSize(44),
+    borderRadius: getResponsiveSize(22),
     backgroundColor: '#374151',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: sizeScale(14),
+    marginRight: getResponsiveSize(14),
   },
   optionTextContainer: {
     flex: 1,
   },
   optionText: {
-    fontSize: sizeScale(16),
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#FFFFFF',
-    marginBottom: sizeScale(2),
+    marginBottom: getResponsiveSize(2),
   },
   optionSubtext: {
-    fontSize: sizeScale(13),
+    fontSize: getFontSize(13),
     color: '#9CA3AF',
   },
   optionDivider: {
     height: 1,
     backgroundColor: '#374151',
-    marginHorizontal: sizeScale(16),
+    marginHorizontal: getResponsiveSize(16),
   },
   deleteText: {
     color: '#EF4444',
@@ -1184,11 +1429,11 @@ const styles = StyleSheet.create({
   },
   mediaViewerCloseButton: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? sizeScale(30) : sizeScale(60),
-    right: sizeScale(20),
+    top: Platform.OS === 'android' ? getResponsiveSize(30) : getResponsiveSize(60),
+    right: getResponsiveSize(20),
     zIndex: 10,
-    padding: sizeScale(10),
-    borderRadius: sizeScale(25),
+    padding: getResponsiveSize(10),
+    borderRadius: getResponsiveSize(25),
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   fullScreenMedia: {
@@ -1207,19 +1452,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(59, 130, 246, 0.95)',
-    paddingVertical: sizeScale(12),
-    paddingHorizontal: sizeScale(20),
-    borderRadius: sizeScale(25),
+    paddingVertical: getResponsiveSize(12),
+    paddingHorizontal: getResponsiveSize(20),
+    borderRadius: getResponsiveSize(25),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-    gap: sizeScale(8),
+    gap: getResponsiveSize(8),
   },
   toastText: {
     color: '#fff',
-    fontSize: sizeScale(15),
+    fontSize: getFontSize(15),
     fontWeight: '600',
   },
 });

@@ -2,9 +2,10 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { Config } from '../constants/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- AI API Configuration ---
-const AI_BASE_URL: string = Config.AI_BASE_URL;
+const AI_BASE_URL: string = Config.API_BASE_URL; // Changed to use main API base URL
 
 // Create separate axios instance for AI endpoints
 const aiApi: AxiosInstance = axios.create({
@@ -16,9 +17,15 @@ const aiApi: AxiosInstance = axios.create({
   },
 });
 
-// Add request interceptor for debugging
+// Add request interceptor for debugging and auth
 aiApi.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Add auth token to requests
+    const token = await AsyncStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
     console.log('🚀 AI API Request:', {
       url: config.url,
       baseURL: config.baseURL,
@@ -55,6 +62,14 @@ aiApi.interceptors.response.use(
 
 // --- Interfaces for AI Lead Generation ---
 
+interface ExtractedLeadData {
+  title: string | null;
+  description: string | null;
+  location: string | null;
+  quantity: string | null;
+  budget: string | null;
+}
+
 interface AIGeneratedData {
   code: string; // "0" for conversation, "1" for complete data
   title: string | null;
@@ -73,8 +88,16 @@ interface GenerateLeadRequest {
   conversation_history: string;
 }
 
-interface AIApiResponse {
-  data: AIGeneratedData;
+interface ExtractTextRequest {
+  userInput: string;
+}
+
+interface ApiResponse<T> {
+  statusCode: number;
+  status: string;
+  message: string;
+  data: T;
+  errors: any;
 }
 
 /**
@@ -82,12 +105,102 @@ interface AIApiResponse {
  */
 export const aiAPI = {
   /**
-   * Generate lead data from user conversation
+   * Extract lead details from text input
+   * Uses the new /leads/extract-from-text endpoint
+   */
+  extractFromText: async (
+    userInput: string
+  ): Promise<ApiResponse<ExtractedLeadData>> => {
+    try {
+      console.log('📤 Extracting lead details from text...');
+      
+      const response = await aiApi.post<ApiResponse<ExtractedLeadData>>(
+        'leads/extract-from-text', 
+        { userInput }
+      );
+      
+      // Validate response structure
+      if (!response.data || !response.data.data) {
+        console.error('❌ Empty response data from text extraction');
+        throw new Error('AI service returned empty response');
+      }
+
+      console.log('✅ Text extraction successful:', response.data);
+      return response.data;
+      
+    } catch (error: any) {
+      console.error('❌ Text Extraction Error:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      // Enhanced error handling
+      if (error.code === 'ECONNREFUSED') {
+        throw new Error(
+          `Cannot connect to API at ${AI_BASE_URL}. Please ensure the backend server is running.`
+        );
+      }
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        throw new Error(
+          'Request timeout. Please try again.'
+        );
+      }
+
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data;
+        
+        if (status === 401) {
+          throw new Error('Authentication required. Please login again.');
+        }
+        
+        if (status === 404) {
+          throw new Error(
+            `Endpoint not found. Expected: ${AI_BASE_URL}/leads/extract-from-text`
+          );
+        }
+        
+        if (status === 500) {
+          throw new Error(
+            errorData?.message || 'Server error. Please try again later.'
+          );
+        }
+        
+        if (status === 422) {
+          throw new Error(
+            errorData?.message || 'Invalid input format. Please check your text.'
+          );
+        }
+
+        const errorMessage = errorData?.message || 
+                            errorData?.detail || 
+                            errorData?.error ||
+                            `API error: ${status}`;
+        throw new Error(errorMessage);
+      } 
+      
+      if (error.request) {
+        throw new Error(
+          `Unable to reach API at ${AI_BASE_URL}. Please check your connection.`
+        );
+      }
+      
+      throw new Error(error.message || 'Text extraction failed');
+    }
+  },
+
+  /**
+   * Legacy: Generate lead data from user conversation
+   * @deprecated Use extractFromText instead
    */
   generateLead: async (
     requirement: string, 
     conversationHistory: string = ''
-  ): Promise<AIApiResponse> => {
+  ): Promise<{ data: AIGeneratedData }> => {
     try {
       console.log('📤 Sending request to AI service...');
       
@@ -96,21 +209,17 @@ export const aiAPI = {
         conversation_history: conversationHistory,
       });
       
-      // Validate response structure
       if (!response.data) {
         console.error('❌ Empty response data from AI service');
         throw new Error('AI service returned empty response');
       }
 
-      // Check if response has the expected structure
       if (typeof response.data.code === 'undefined') {
         console.error('❌ Invalid response structure:', response.data);
         throw new Error('AI service returned invalid response structure (missing code field)');
       }
 
       console.log('✅ Valid AI response received:', response.data);
-      
-      // Wrap the response in the expected format
       return { data: response.data };
       
     } catch (error: any) {
@@ -122,7 +231,6 @@ export const aiAPI = {
         status: error.response?.status,
       });
 
-      // Enhanced error handling with specific messages
       if (error.code === 'ECONNREFUSED') {
         throw new Error(
           `Cannot connect to AI service at ${AI_BASE_URL}. Please ensure the backend server is running.`
@@ -136,7 +244,6 @@ export const aiAPI = {
       }
 
       if (error.response) {
-        // Server responded with error status
         const status = error.response.status;
         const errorData = error.response.data;
         
@@ -166,17 +273,11 @@ export const aiAPI = {
       } 
       
       if (error.request) {
-        // Request was made but no response received
         throw new Error(
-          `Unable to reach AI service at ${AI_BASE_URL}. Please check:\n` +
-          '1. Backend server is running\n' +
-          '2. Correct URL in config.ts\n' +
-          '3. Network connection\n' +
-          '4. CORS is enabled on backend'
+          `Unable to reach AI service at ${AI_BASE_URL}. Please check your connection.`
         );
       }
       
-      // Something else happened
       throw new Error(error.message || 'AI generation failed');
     }
   },
@@ -186,5 +287,6 @@ export const aiAPI = {
 export type { 
   AIGeneratedData, 
   GenerateLeadRequest,
-  AIApiResponse 
+  ExtractedLeadData,
+  ApiResponse 
 };

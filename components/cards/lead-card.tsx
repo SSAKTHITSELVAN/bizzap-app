@@ -1,681 +1,500 @@
 // components/cards/lead-card.tsx
-
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Share,
-  Alert,
-  Modal,
-  Linking,
-  Dimensions,
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  TouchableOpacity, 
+  Share, 
+  Modal, 
+  Dimensions, 
+  useWindowDimensions, 
   ActivityIndicator,
+  Alert
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Share2, Phone, MessageCircle, X } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { MapPin, Clock, Bookmark, Share2, X, MessageCircle, AlertCircle } from 'lucide-react-native';
 import { Lead, leadsAPI } from '../../services/leads';
 import { chatAPI } from '../../services/chat-websocket';
-import { Ionicons } from '@expo/vector-icons';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const STANDARD_WIDTH = 390;
-const sizeScale = (size: number) => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface LeadCardProps {
   lead: Lead;
-  gradientIndex?: number;
-  onConsumeSuccess?: (contact: string) => void;
+  onConsumeSuccess?: () => void;
 }
 
-interface ConsumedLead {
-  id: string;
-  companyId: string;
-  leadId: string;
-  consumedAt: string;
-  lead: {
-    company: {
-      id: string;
-      phoneNumber: string;
-      companyName: string;
-    };
-  };
-}
-
-export const LeadCard: React.FC<LeadCardProps> = ({
-  lead,
-  gradientIndex = 0,
-  onConsumeSuccess
-}) => {
+export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const [imageZoomed, setImageZoomed] = useState(false);
+  const [showConsumeModal, setShowConsumeModal] = useState(false);
   const [isConsuming, setIsConsuming] = useState(false);
-  const [showContactModal, setShowContactModal] = useState(false);
-  const [isAlreadyConsumed, setIsAlreadyConsumed] = useState(false);
-  const [consumedData, setConsumedData] = useState<ConsumedLead | null>(null);
-  const [isCheckingConsumed, setIsCheckingConsumed] = useState(true);
+  
+  const { width: screenWidth } = useWindowDimensions();
+  
+  // Calculate responsive dimensions
+  const cardWidth = Math.min(screenWidth - 32, 400);
 
-  useEffect(() => {
-    checkIfConsumed();
-  }, [lead.id]);
-
-  const checkIfConsumed = async () => {
-    try {
-      setIsCheckingConsumed(true);
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/companies/consumed-leads`, {
-        headers: {
-          'Authorization': `Bearer ${await getAuthToken()}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const consumed = data.data.find((item: ConsumedLead) => item.leadId === lead.id);
-        
-        if (consumed) {
-          setIsAlreadyConsumed(true);
-          setConsumedData(consumed);
-          console.log('✅ Lead already consumed:', consumed);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check consumed leads:', error);
-    } finally {
-      setIsCheckingConsumed(false);
-    }
+  // --- Generate Deep Link ---
+  const generateLeadLink = () => {
+    // Format: bizzap://dashboard?leadId={leadId}
+    // For web fallback: https://bizzap.app/dashboard?leadId={leadId}
+    return `https://bizzap.app/dashboard?leadId=${lead.id}`;
   };
 
-  const getAuthToken = async () => {
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-    return await AsyncStorage.getItem('authToken');
-  };
-
-  const formatNumber = (num: string | null) => {
-    if (!num) return 'N/A';
-    const n = parseInt(num);
-    if (isNaN(n)) return num;
-    if (n >= 1000000000) return `${(n / 1000000000).toFixed(1)}B`;
-    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-    return num;
-  };
-
+  // --- Share Handler ---
   const handleShare = async () => {
     try {
-      const message = `Check out this lead: "${lead.title}"${
-        lead.budget ? ` - Budget: ₹${lead.budget}` : ''
-      }${lead.quantity ? ` | Quantity: ${formatNumber(lead.quantity)}` : ''}`;
+      const leadLink = generateLeadLink();
+      
+      const message = `🔥 Check out this lead on Bizzap!\n\n` +
+        `${lead.title}\n` +
+        `📍 ${lead.location || 'Location not specified'}\n` +
+        `💰 ${lead.budget ? `Budget: ${lead.budget}` : 'Budget: Negotiable'}\n\n` +
+        `View full details: ${leadLink}`;
 
       await Share.share({
         message,
-        title: lead.title,
+        title: `Lead: ${lead.title}`,
+        url: leadLink, // iOS will use this
       });
     } catch (error) {
-      console.error('Share failed:', error);
+      console.error('Error sharing:', error);
     }
   };
 
-  const handleDirectCall = async () => {
-    setShowContactModal(false);
-    
-    if (!consumedData) return;
-    
-    const phoneNumber = consumedData.lead.company.phoneNumber;
-    const phoneUrl = `tel:${phoneNumber}`;
-    
-    try {
-      const canOpen = await Linking.canOpenURL(phoneUrl);
-      if (canOpen) {
-        await Linking.openURL(phoneUrl);
-      } else {
-        Alert.alert('Error', 'Unable to make phone call');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to initiate call');
-    }
+  // --- Chat/Consume Logic ---
+  const handleChatPress = () => {
+    setShowConsumeModal(true);
   };
 
-  const handleDirectChat = () => {
-    setShowContactModal(false);
-    console.log('🚀 Navigating directly to chat (already consumed):', lead.companyId);
-    router.push(`/(app)/chat/${lead.companyId}`);
-  };
-
-  const handlePhoneCall = async () => {
-    if (isConsuming) return;
-
-    setShowContactModal(false);
-    setIsConsuming(true);
-
+  const confirmConsumption = async () => {
     try {
-      console.log('📞 Consuming lead for phone call:', lead.id);
-      const response = await leadsAPI.consumeLead(lead.id);
-      
-      console.log('✅ Consume response:', response);
-      
-      if (response.status === 'success' && response.data?.contact) {
-        const phoneNumber = response.data.contact;
-        console.log('✅ Got phone number:', phoneNumber);
-        
-        // Update consumed status
-        setIsAlreadyConsumed(true);
-        
-        const phoneUrl = `tel:${phoneNumber}`;
-        const canOpen = await Linking.canOpenURL(phoneUrl);
-        
-        if (canOpen) {
-          await Linking.openURL(phoneUrl);
-          onConsumeSuccess?.(phoneNumber);
-        } else {
-          Alert.alert('Error', 'Unable to make phone call');
-        }
-      } else {
-        throw new Error('Failed to get contact information');
-      }
-    } catch (error: any) {
-      console.error('❌ Phone call failed:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to get contact information. Please try again.'
-      );
-    } finally {
-      setIsConsuming(false);
-    }
-  };
+      setIsConsuming(true);
 
-  const handleChatOption = async () => {
-    if (isConsuming) return;
-
-    setShowContactModal(false);
-    setIsConsuming(true);
-    
-    try {
-      console.log('💬 Starting chat flow for lead:', lead.id);
-      console.log('Company ID:', lead.companyId);
-      
-      console.log('📞 Consuming lead...');
+      // 1. Consume the lead
       const consumeResponse = await leadsAPI.consumeLead(lead.id);
-      
-      console.log('✅ Consume response:', consumeResponse);
-      
-      if (consumeResponse.status !== 'success' || !consumeResponse.data?.contact) {
-        throw new Error('Failed to consume lead');
-      }
-      
-      const phoneNumber = consumeResponse.data.contact;
-      console.log('✅ Lead consumed, contact:', phoneNumber);
-      
-      // Update consumed status
-      setIsAlreadyConsumed(true);
-      
-      // Send initial message only on first consume
-      const initialMessage = `Hello! I'm interested in your lead: "${lead.title}". Can we discuss further?`;
-      
-      console.log('📤 Sending initial message...');
-      
-      try {
-        await chatAPI.sendMessage({
-          receiverId: lead.companyId,
-          message: initialMessage,
-          messageType: 'text',
-        });
+
+      if (consumeResponse.status === 'success') {
         
-        console.log('✅ Message sent successfully');
-      } catch (chatError: any) {
-        console.error('⚠️ Failed to send initial message (continuing anyway):', chatError);
+        // 2. Refresh dashboard quota
+        if (onConsumeSuccess) {
+          onConsumeSuccess();
+        }
+
+        // 3. Auto-post first message
+        const starterMessage = `Hello, I saw your lead "${lead.title}" in ${lead.location || 'your area'} and would like to discuss the requirements.`;
+        
+        try {
+            await chatAPI.sendMessage({
+                receiverId: lead.companyId,
+                message: starterMessage,
+                messageType: 'text'
+            });
+        } catch (msgError) {
+            console.warn("Failed to send auto-message, navigating anyway", msgError);
+        }
+
+        // 4. Close Modal
+        setShowConsumeModal(false);
+        setIsConsuming(false);
+
+        // 5. Navigate to Chat
+        router.push({
+            pathname: '/(app)/chat/[companyId]',
+            params: { companyId: lead.companyId }
+        });
       }
-      
-      // Small delay then navigate
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      console.log('🚀 Navigating to chat...');
-      router.push(`/(app)/chat/${lead.companyId}`);
-      
-      onConsumeSuccess?.(phoneNumber);
-      
     } catch (error: any) {
-      console.error('❌ Chat flow failed:', error);
-      
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to start chat. Please try again.'
-      );
-    } finally {
       setIsConsuming(false);
+      setShowConsumeModal(false);
+      const msg = error.message || 'Failed to consume lead. Please check your quota.';
+      Alert.alert('Error', msg);
     }
   };
-
-  const imageUrl = lead.image?.startsWith('data:image')
-    ? lead.image
-    : lead.image || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800';
 
   return (
-    <View style={styles.card}>
-      {/* Share Button - Top Right */}
-      <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-        <Share2 size={18} color="#a1a1aa" strokeWidth={2.5} />
-      </TouchableOpacity>
-
-      {/* Lead Title at Top */}
-      <View style={styles.headerSection}>
-        <Text style={styles.leadTitle} numberOfLines={2}>
-          {lead.title}
-        </Text>
-        <View style={styles.dateRow}>
-          <Ionicons name="time-outline" size={14} color="#9ca3af" />
-          <Text style={styles.postedDate}>
-            {new Date(lead.createdAt).toLocaleDateString()}
-          </Text>
-        </View>
-      </View>
-
-      {/* Lead Image */}
-      {lead.image && (
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.leadImage}
-            resizeMode="cover"
-          />
-        </View>
-      )}
-
-      {/* Lead Content */}
-      <View style={styles.content}>
-        <Text style={styles.leadDescription} numberOfLines={3}>
-          {lead.description}
-        </Text>
-
-        {/* Highlighted Tags */}
-        <View style={styles.tagsContainer}>
-          {lead.budget && (
-            <View style={[styles.tag, styles.tagBudgetHighlight]}>
-              <Ionicons name="cash" size={16} color="#93c5fd" />
-              <Text style={[styles.tagText, styles.tagTextBudgetHighlight]}>
-                {lead.budget}
-              </Text>
-            </View>
-          )}
-          {lead.quantity && (
-            <View style={[styles.tag, styles.tagQuantityHighlight]}>
-              <Ionicons name="cube" size={16} color="#d8b4fe" />
-              <Text style={[styles.tagText, styles.tagTextQuantityHighlight]}>
-                {formatNumber(lead.quantity)}
-              </Text>
-            </View>
-          )}
-          {lead.location && (
-            <View style={[styles.tag, styles.tagLocation]}>
-              <Ionicons name="location" size={16} color="#d1d5db" />
-              <Text style={[styles.tagText, styles.tagTextLocation]}>
-                {lead.location}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Stats and Actions */}
-      <View style={styles.footer}>
-        <View style={styles.stats}>
-          <View style={styles.statItem}>
-            <Ionicons name="eye-outline" size={16} color="#9ca3af" />
-            <Text style={styles.statsText}>{lead.viewCount || 0}</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Ionicons name="checkmark-circle-outline" size={16} color="#9ca3af" />
-            <Text style={styles.statsText}>{lead.consumedCount || 0}</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => setShowContactModal(true)}
-          disabled={isConsuming || isCheckingConsumed}
-          style={[isConsuming && styles.actionButtonDisabled]}
+    <>
+      <View style={[styles.cardOuter, { width: cardWidth }]}>
+        {/* Title Section */}
+        <TouchableOpacity 
+          style={styles.titleSection} 
+          onPress={() => setExpanded(!expanded)} 
+          activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={isAlreadyConsumed ? ['#10b981', '#059669'] : ['#3b82f6', '#8b5cf6']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.actionButton}
-          >
-            {isCheckingConsumed ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#ffffff" />
-              </View>
-            ) : isConsuming ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#ffffff" />
-                <Text style={styles.actionButtonText}>Processing...</Text>
-              </View>
-            ) : (
-              <Text style={styles.actionButtonText}>
-                {isAlreadyConsumed ? 'Contact Seller' : 'Talk to Seller'}
-              </Text>
-            )}
-          </LinearGradient>
+          <Text style={styles.mainTitle} numberOfLines={expanded ? undefined : 2}>
+            {lead.title}
+          </Text>
+          <View style={styles.metaRow}>
+            <View style={styles.metaGroup}>
+              <MapPin size={16} color="#8FA8CC" />
+              <Text style={styles.metaLabel} numberOfLines={1}>{lead.location}</Text>
+            </View>
+            <View style={styles.metaGroup}>
+              <Clock size={16} color="#8FA8CC" />
+              <Text style={styles.metaLabel} numberOfLines={1}>10:30 AM Today</Text>
+            </View>
+          </View>
         </TouchableOpacity>
+
+        {/* Details Body */}
+        <View style={styles.detailBody}>
+          <TouchableOpacity onPress={() => setImageZoomed(true)} activeOpacity={0.8}>
+            <Image 
+                source={{ uri: lead.imageUrl || 'https://via.placeholder.com/72' }} 
+                style={styles.leadThumb} 
+            />
+          </TouchableOpacity>
+          
+          <View style={styles.statsContainer}>
+            <View style={styles.statCol}>
+              <Text style={styles.sLabel} numberOfLines={1}>Quantity</Text>
+              <Text style={styles.sValue} numberOfLines={1}>
+                {lead.quantity || 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.statCol}>
+              <Text style={styles.sLabel} numberOfLines={1}>Budget</Text>
+              <Text style={styles.sValue} numberOfLines={1}>
+                {lead.budget ? `₹${lead.budget}` : 'Negotiable'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Expanded Description */}
+        {expanded && lead.description && (
+          <View style={styles.descriptionContainer}>
+            <Text style={styles.descriptionText}>{lead.description}</Text>
+          </View>
+        )}
+
+        {/* Footer Bar */}
+        <View style={styles.footerBar}>
+          <View style={styles.utilIcons}>
+            <TouchableOpacity 
+              onPress={handleShare}
+              style={styles.iconButton}
+            >
+              <Share2 size={24} color="#FFF" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.chatAction}
+            onPress={handleChatPress}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.chatText}>Talk to Buyer</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Contact Options Modal */}
+      {/* Image Zoom Modal */}
       <Modal
-        visible={showContactModal}
+        visible={imageZoomed}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => !isConsuming && setShowContactModal(false)}
+        onRequestClose={() => setImageZoomed(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => !isConsuming && setShowContactModal(false)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Contact Seller</Text>
-              <TouchableOpacity 
-                onPress={() => setShowContactModal(false)}
-                style={styles.closeButton}
-                disabled={isConsuming}
-              >
-                <X size={24} color={isConsuming ? "#666666" : "#ffffff"} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubtitle}>
-              {isConsuming 
-                ? 'Setting up your connection...' 
-                : isAlreadyConsumed
-                  ? 'Choose how to connect'
-                  : 'This will consume 1 lead credit'}
-            </Text>
-
-            {/* Phone Option */}
-            <TouchableOpacity
-              style={[styles.contactOption, isConsuming && styles.optionDisabled]}
-              onPress={isAlreadyConsumed ? handleDirectCall : handlePhoneCall}
-              disabled={isConsuming}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.optionIconWrapper, styles.phoneIconWrapper]}>
-                <Phone size={24} color="#ffffff" />
-              </View>
-              <View style={styles.optionTextWrapper}>
-                <Text style={styles.optionTitle}>Phone Call</Text>
-                <Text style={styles.optionSubtitle}>
-                  {isAlreadyConsumed ? 'Call seller directly' : 'Get contact & call'}
-                </Text>
-              </View>
+        <View style={styles.modalContainer}>
+          <TouchableOpacity 
+            style={styles.modalBackground} 
+            activeOpacity={1} 
+            onPress={() => setImageZoomed(false)}
+          >
+            <TouchableOpacity style={styles.closeButton} onPress={() => setImageZoomed(false)}>
+              <X size={32} color="#FFF" strokeWidth={3} />
             </TouchableOpacity>
-
-            {/* Chat Option */}
-            <TouchableOpacity
-              style={[styles.contactOption, isConsuming && styles.optionDisabled]}
-              onPress={isAlreadyConsumed ? handleDirectChat : handleChatOption}
-              disabled={isConsuming}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.optionIconWrapper, styles.chatIconWrapper]}>
-                <MessageCircle size={24} color="#ffffff" />
-              </View>
-              <View style={styles.optionTextWrapper}>
-                <Text style={styles.optionTitle}>Start Chat</Text>
-                <Text style={styles.optionSubtitle}>
-                  {isAlreadyConsumed 
-                    ? 'Continue conversation' 
-                    : 'Send initial message & start chatting'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {isConsuming && (
-              <View style={styles.processingContainer}>
-                <ActivityIndicator color="#8b5cf6" size="small" />
-                <Text style={styles.processingText}>Processing your request...</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
+            <Image 
+              source={{ uri: lead.imageUrl || '' }} 
+              style={styles.zoomedImage}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
       </Modal>
-    </View>
+
+      {/* Consume Confirmation Modal */}
+      <Modal
+        visible={showConsumeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => !isConsuming && setShowConsumeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+            <View style={styles.consumeCard}>
+                <View style={styles.consumeIconCircle}>
+                    <MessageCircle size={32} color="#0057D9" />
+                </View>
+                
+                <Text style={styles.consumeTitle}>Contact Buyer?</Text>
+                
+                <Text style={styles.consumeDesc}>
+                    Starting a conversation will consume <Text style={styles.highlightText}>1 Lead Credit</Text> from your monthly quota.
+                </Text>
+
+                <View style={styles.consumeActions}>
+                    <TouchableOpacity 
+                        style={styles.btnCancel}
+                        onPress={() => setShowConsumeModal(false)}
+                        disabled={isConsuming}
+                    >
+                        <Text style={styles.btnCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.btnConfirm}
+                        onPress={confirmConsumption}
+                        disabled={isConsuming}
+                    >
+                        {isConsuming ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                            <Text style={styles.btnConfirmText}>Confirm & Chat</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+      </Modal>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#333333',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  shareButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerSection: {
-    padding: 20,
-    paddingRight: 60,
-  },
-  leadTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#f9fafb',
-    marginBottom: 10,
-    lineHeight: 28,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  postedDate: {
-    fontSize: 13,
-    color: '#9ca3af',
-    fontWeight: '500',
-  },
-  imageContainer: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#333333',
-  },
-  leadImage: {
-    width: '100%',
-    height: '100%',
-  },
-  content: {
-    padding: 20,
-  },
-  leadDescription: {
-    fontSize: 15,
-    color: '#d1d5db',
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  tagBudgetHighlight: {
-    backgroundColor: '#1e40af',
-    borderWidth: 1.5,
-    borderColor: '#3b82f6',
-  },
-  tagQuantityHighlight: {
-    backgroundColor: '#6b21a8',
-    borderWidth: 1.5,
-    borderColor: '#8b5cf6',
-  },
-  tagLocation: {
-    backgroundColor: '#374151',
-  },
-  tagText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tagTextBudgetHighlight: {
-    color: '#93c5fd',
-  },
-  tagTextQuantityHighlight: {
-    color: '#d8b4fe',
-  },
-  tagTextLocation: {
-    color: '#d1d5db',
-  },
-  footer: {
+  cardOuter: {
+    backgroundColor: '#0F1417',
     padding: 16,
-    paddingTop: 0,
-  },
-  stats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    gap: 20,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#444',
-  },
-  statsText: {
-    fontSize: 14,
-    color: '#9ca3af',
-    fontWeight: '600',
-  },
-  actionButton: {
-    paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    marginBottom: 16,
+    alignSelf: 'center',
   },
-  actionButtonDisabled: {
-    opacity: 0.6,
+  titleSection: {
+    width: '100%',
+    borderRadius: 4,
+    padding: 8,
+    backgroundColor: 'rgba(0, 87, 217, 0.04)',
+    marginBottom: 20,
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 0,
   },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  actionButtonText: {
+  mainTitle: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-    color: '#ffffff',
-    letterSpacing: 0.3,
+    marginBottom: 8,
+    fontFamily: 'Outfit',
+    lineHeight: 22,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  metaGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+  },
+  metaLabel: {
+    color: '#8FA8CC',
+    fontSize: 12,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  detailBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  leadThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: '#595959',
+    backgroundColor: '#1E293B',
+  },
+  statsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    marginLeft: 12,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  statCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 4,
+  },
+  divider: {
+    width: 1,
+    height: 38,
+    backgroundColor: '#595959',
+  },
+  sLabel: {
+    color: '#8FA8CC',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  sValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  descriptionContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  descriptionText: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: 'Outfit',
+  },
+  footerBar: {
+    height: 40,
+    backgroundColor: 'rgba(0, 87, 217, 0.17)',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  utilIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatAction: {
+    minWidth: 157,
+    backgroundColor: '#0057D9',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  chatText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 24,
+  },
+  zoomedImage: {
+    width: '100%',
+    height: SCREEN_HEIGHT * 0.8,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  modalContent: {
-    backgroundColor: '#1c1c1e',
-    borderRadius: 20,
+  consumeCard: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 340,
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: '#30363D',
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  consumeIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0, 87, 217, 0.1)',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    marginBottom: 16,
   },
-  modalTitle: {
-    fontSize: 22,
+  consumeTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#FFF',
+    marginBottom: 12,
+    fontFamily: 'Outfit',
   },
-  closeButton: {
-    padding: 4,
-  },
-  modalSubtitle: {
+  consumeDesc: {
     fontSize: 14,
-    color: '#9ca3af',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  contactOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#333333',
-  },
-  optionDisabled: {
-    opacity: 0.5,
-  },
-  optionIconWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  phoneIconWrapper: {
-    backgroundColor: '#10b981',
-  },
-  chatIconWrapper: {
-    backgroundColor: '#3b82f6',
-  },
-  optionTextWrapper: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  optionSubtitle: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
-  processingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#333333',
-  },
-  processingText: {
+    color: '#94A3B8',
     textAlign: 'center',
-    color: '#9ca3af',
-    fontSize: 15,
-    fontWeight: '500',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  highlightText: {
+    color: '#00D1B2',
+    fontWeight: '700',
+  },
+  consumeActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  btnCancel: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnCancelText: {
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  btnConfirm: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#0057D9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnConfirmText: {
+    color: '#FFF',
+    fontWeight: '600',
   },
 });

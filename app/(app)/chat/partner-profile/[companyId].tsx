@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+// app/(app)/chat/partner-profile/[companyId].tsx
+
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -11,12 +13,9 @@ import {
     Share,
     ActivityIndicator
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../../context/AuthContext';
-import { useFocusEffect } from '@react-navigation/native';
-import { companyAPI, followersAPI } from '../../../services/user';
-import { leadsAPI } from '../../../services/leads';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { companyAPI } from '../../../../services/user';
 
 // --- Responsive Sizing Utility ---
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -25,7 +24,6 @@ const sizeScale = (size: number): number => (SCREEN_WIDTH / STANDARD_WIDTH) * si
 
 // --- Assets & Constants ---
 const PLACEHOLDER_AVATAR = 'https://via.placeholder.com/150/1a1a1a/666?text=User';
-// Using a darker placeholder so it doesn't blend into the white text if image fails
 const PLACEHOLDER_COVER = 'https://via.placeholder.com/390x150/0F1115/333333?text=Cover';
 
 // Define Colors
@@ -35,70 +33,51 @@ const COLORS = {
     iconColor: '#8FA8CC',
     textWhite: '#FFFFFF',
     textBlue: '#589AFD',
-    orange: '#FF7A00',
-    orangeBg: 'rgba(255, 122, 0, 0.18)',
-    orangeBorder: 'rgba(255, 122, 0, 0.4)',
-    badgeRed: '#F54900',
     cardBorder: 'rgba(120, 120, 120, 0.2)',
     glassBg: 'rgba(255, 255, 255, 0.04)',
 };
 
-export default function AccountsCenterScreen() {
+export default function PartnerProfileScreen() {
     const router = useRouter();
-    const { user, refreshUser } = useAuth();
+    const { companyId } = useLocalSearchParams<{ companyId: string }>();
     const [loading, setLoading] = useState(true);
     const [profileData, setProfileData] = useState<any>(null);
-    const [counts, setCounts] = useState({ followers: 0, following: 0, leads: 0 });
 
-    useFocusEffect(
-        React.useCallback(() => {
-            loadAllData();
-        }, [])
-    );
+    useEffect(() => {
+        if (companyId) {
+            loadPartnerData();
+        }
+    }, [companyId]);
 
-    const loadAllData = async () => {
+    const loadPartnerData = async () => {
         try {
             setLoading(true);
-            const [profileRes, followersRes, followingRes, leadsRes] = await Promise.all([
-                companyAPI.getProfile(),
-                followersAPI.getFollowers(),
-                followersAPI.getFollowing(),
-                leadsAPI.getMyLeads()
-            ]);
-            setProfileData(profileRes);
-            setCounts({
-                followers: followersRes?.length || 0,
-                following: followingRes?.length || 0,
-                leads: leadsRes?.data?.length || 0
-            });
-            if (refreshUser) await refreshUser();
+            const data = await companyAPI.getCompanyById(companyId);
+            setProfileData(data);
         } catch (error) {
-            console.error('Data load error:', error);
+            console.error('Partner profile load error:', error);
         } finally {
             setLoading(false);
         }
     };
 
     const handleBack = () => router.back();
-    const handleEdit = () => router.push('/profile/edit-profile');
     
     const handleShare = async () => {
         try {
             await Share.share({
-                message: `Check out ${user?.companyName || 'my profile'} on Bizzap!`,
+                message: `Check out ${profileData?.companyName || 'this profile'} on Bizzap!`,
             });
         } catch (error) {
             console.error(error);
         }
     };
 
-    const displayData = profileData || user || {};
-    
     // --- Image Logic ---
-    const avatarImage = displayData.logo || displayData.userPhoto || PLACEHOLDER_AVATAR;
-    const coverImage = displayData.coverImage || PLACEHOLDER_COVER;
+    const avatarImage = profileData?.logo || profileData?.userPhoto || PLACEHOLDER_AVATAR;
+    const coverImage = profileData?.coverImage || PLACEHOLDER_COVER;
 
-    if (loading && !profileData) {
+    if (loading) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#0057D9" />
@@ -118,15 +97,13 @@ export default function AccountsCenterScreen() {
             >
                 {/* --- 1. Top Section (Cover + Back Button) --- */}
                 <View style={styles.coverSection}>
-                    {/* Key prop forces re-render if URL changes */}
                     <Image 
                         source={{ uri: coverImage }} 
                         style={styles.coverImage} 
                         resizeMode="cover" 
-                        key={coverImage}
                     />
                     
-                    {/* Back Button with High Z-Index */}
+                    {/* Back Button */}
                     <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
                         <Feather name="chevron-left" size={sizeScale(28)} color="#fff" />
                     </TouchableOpacity>
@@ -136,10 +113,7 @@ export default function AccountsCenterScreen() {
                 <View style={styles.depthFrame}>
                     <View style={styles.cardBackground}>
                         
-                        {/* Icons */}
-                        <TouchableOpacity style={styles.iconEdit} onPress={handleEdit}>
-                            <MaterialCommunityIcons name="pencil-outline" size={sizeScale(22)} color="#fff" />
-                        </TouchableOpacity>
+                        {/* Share Icon Only (No Edit) */}
                         <TouchableOpacity style={styles.iconShare} onPress={handleShare}>
                             <Ionicons name="share-social-outline" size={sizeScale(22)} color="#fff" />
                         </TouchableOpacity>
@@ -150,96 +124,67 @@ export default function AccountsCenterScreen() {
                                 source={{ uri: avatarImage }} 
                                 style={styles.avatar} 
                                 resizeMode="cover"
-                                key={avatarImage}
                             />
                         </View>
 
-                        <TouchableOpacity onPress={handleEdit}>
-                            <Text style={styles.changeProfileText}>Change Profile</Text>
-                        </TouchableOpacity>
+                        {/* Spacer where "Change Profile" used to be */}
+                        <View style={{ height: sizeScale(16) }} />
 
                         {/* Info Glass Box */}
                         <View style={styles.glassInfoBox}>
                             <View style={styles.infoColumn}>
                                 <Text style={styles.label}>Company Name</Text>
                                 <Text style={styles.valueLarge} numberOfLines={1}>
-                                    {displayData.companyName || 'Company Name'}
+                                    {profileData?.companyName || 'Unknown Company'}
                                 </Text>
                             </View>
 
                             <View style={styles.verticalLine} />
 
                             <View style={styles.infoColumn}>
-                                <Text style={styles.label}>User Name</Text>
+                                <Text style={styles.label}>Phone</Text>
                                 <Text style={styles.valueLarge} numberOfLines={1}>
-                                    {displayData.userName || 'User Name'}
+                                    {profileData?.phoneNumber || 'N/A'}
                                 </Text>
                             </View>
                         </View>
                     </View>
                 </View>
 
-                {/* --- 3. Organisation Users Row --- */}
-                <View style={styles.orgUsersRow}>
-                    <View style={styles.orgFrame}>
-                        <Text style={styles.orgLabel}>12 Organisation Users</Text>
-                        
-                        <View style={styles.avatarStack}>
-                            <View style={[styles.stackCircle, { right: 0, zIndex: 1, backgroundColor: '#333' }]}>
-                                <Text style={styles.stackCount}>12</Text>
-                            </View>
-                            <View style={[styles.stackCircle, { right: 18, zIndex: 2, backgroundColor: '#555' }]} />
-                            <View style={[styles.stackCircle, { right: 36, zIndex: 3, backgroundColor: '#777' }]} />
-                            <Image 
-                                source={{ uri: avatarImage }} 
-                                style={[styles.stackCircle, { right: 54, zIndex: 4, backgroundColor: '#999' }]} 
-                                key={avatarImage + 'mini'}
-                            />
-                        </View>
-                    </View>
-                </View>
-
-                {/* --- 4. Access Requests Button --- */}
-                <View style={styles.buttonWrapper}>
-                    <TouchableOpacity style={styles.accessButton} activeOpacity={0.8}>
-                        <View style={styles.accessContent}>
-                            <Feather name="box" size={sizeScale(16)} color="#E1E8F0" />
-                            <Text style={styles.accessText}>12 New Access Requests</Text>
-                        </View>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>New</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* --- 5. Details Section --- */}
+                {/* --- 3. Details Section --- */}
                 <View style={styles.detailsContainer}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Company Details</Text>
+                    </View>
+
                     <View style={styles.detailRow}>
                         <View style={styles.detailLabelCol}>
                             <Text style={styles.detailLabel}>GST Number</Text>
                         </View>
                         <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{displayData.gstNumber || 'Not Provided'}</Text>
+                            <Text style={styles.detailValue}>{profileData?.gstNumber || 'Not Provided'}</Text>
                         </View>
                     </View>
 
                     <View style={styles.detailRow}>
                         <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>PAN</Text>
+                            <Text style={styles.detailLabel}>Category</Text>
                         </View>
                         <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{displayData.panNumber || 'Not Provided'}</Text>
+                            <Text style={styles.detailValue}>{profileData?.category || 'General'}</Text>
                         </View>
                     </View>
 
-                     <View style={styles.detailRow}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>Phone Number</Text>
+                    {profileData?.description && (
+                        <View style={styles.detailRow}>
+                            <View style={styles.detailLabelCol}>
+                                <Text style={styles.detailLabel}>About</Text>
+                            </View>
+                            <View style={styles.detailValueCol}>
+                                <Text style={styles.detailValue}>{profileData.description}</Text>
+                            </View>
                         </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{displayData.phoneNumber || 'Not Provided'}</Text>
-                        </View>
-                    </View>
+                    )}
 
                     <View style={[styles.detailRow, { borderTopWidth: 1, borderTopColor: COLORS.cardBorder }]}>
                         <View style={styles.detailLabelCol}>
@@ -247,12 +192,13 @@ export default function AccountsCenterScreen() {
                         </View>
                         <View style={styles.detailValueCol}>
                             <Text style={styles.detailValue} numberOfLines={3}>
-                                {displayData.address || 'No address provided'}
+                                {profileData?.address || 'No address provided'}
                             </Text>
                         </View>
                     </View>
                 </View>
 
+                {/* Spacer */}
                 <View style={{ height: sizeScale(40) }} />
             </ScrollView>
         </View>
@@ -278,7 +224,7 @@ const styles = StyleSheet.create({
     },
     // --- Cover Section ---
     coverSection: {
-        height: sizeScale(150), // Increased height to prevent full hiding
+        height: sizeScale(150),
         width: '100%',
         position: 'relative',
         zIndex: 0,
@@ -286,11 +232,11 @@ const styles = StyleSheet.create({
     coverImage: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#1a1a1a', // Shows if image loads slowly
+        backgroundColor: '#1a1a1a',
     },
     backButton: {
         position: 'absolute',
-        top: sizeScale(50), // Adjusted for typical Status Bar
+        top: sizeScale(50),
         left: sizeScale(16),
         width: sizeScale(40),
         height: sizeScale(40),
@@ -298,11 +244,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'rgba(0,0,0,0.3)', 
         borderRadius: sizeScale(20),
-        zIndex: 20, // Critical: Keeps button above everything
+        zIndex: 20,
     },
     // --- Depth Frame ---
     depthFrame: {
-        marginTop: sizeScale(-75), // Exact 50% overlap of 150px height
+        marginTop: sizeScale(-75),
         paddingHorizontal: sizeScale(16),
         width: '100%',
         zIndex: 1,
@@ -318,19 +264,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#1F2937',
     },
-    iconEdit: {
-        position: 'absolute',
-        top: sizeScale(16),
-        right: sizeScale(50),
-        zIndex: 10,
-    },
     iconShare: {
         position: 'absolute',
         top: sizeScale(16),
         right: sizeScale(16),
         zIndex: 10,
     },
-    // --- Avatar ---
     avatarContainer: {
         width: sizeScale(100),
         height: sizeScale(100),
@@ -346,12 +285,6 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: sizeScale(50),
     },
-    changeProfileText: {
-        color: COLORS.textBlue,
-        fontSize: sizeScale(14),
-        fontWeight: '500',
-        marginBottom: sizeScale(16),
-    },
     // --- Glass Info Box ---
     glassInfoBox: {
         width: '92%',
@@ -365,6 +298,7 @@ const styles = StyleSheet.create({
     infoColumn: {
         flex: 1,
         paddingHorizontal: sizeScale(4),
+        alignItems: 'center',
     },
     verticalLine: {
         width: 1,
@@ -382,96 +316,23 @@ const styles = StyleSheet.create({
         fontSize: sizeScale(16),
         fontWeight: '600',
     },
-    // --- Org Users ---
-    orgUsersRow: {
-        paddingHorizontal: sizeScale(16),
-        marginTop: sizeScale(20),
-        width: '100%',
-    },
-    orgFrame: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
-        borderRadius: sizeScale(8),
-        padding: sizeScale(12),
-        backgroundColor: '#000',
-    },
-    orgLabel: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(14),
-        fontWeight: '500',
-    },
-    avatarStack: {
-        width: sizeScale(80),
-        height: sizeScale(24),
-        position: 'relative',
-    },
-    stackCircle: {
-        width: sizeScale(24),
-        height: sizeScale(24),
-        borderRadius: sizeScale(12),
-        borderWidth: 1,
-        borderColor: '#fff',
-        position: 'absolute',
-        top: 0,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    stackCount: {
-        color: '#fff',
-        fontSize: sizeScale(9),
-        fontWeight: '700',
-    },
-    // --- Access Button ---
-    buttonWrapper: {
-        paddingHorizontal: sizeScale(16),
-        marginTop: sizeScale(20),
-        width: '100%',
-        alignItems: 'center',
-    },
-    accessButton: {
-        width: '100%',
-        height: sizeScale(40),
-        backgroundColor: COLORS.orangeBg,
-        borderRadius: sizeScale(8),
-        borderWidth: 1,
-        borderColor: COLORS.orangeBorder,
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-    },
-    accessContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: sizeScale(8),
-    },
-    accessText: {
-        color: '#E1E8F0',
-        fontSize: sizeScale(14),
-        fontWeight: '400',
-    },
-    badge: {
-        position: 'absolute',
-        top: sizeScale(-10),
-        right: sizeScale(24),
-        backgroundColor: COLORS.badgeRed,
-        paddingHorizontal: sizeScale(6),
-        paddingVertical: sizeScale(2),
-        borderRadius: sizeScale(4),
-    },
-    badgeText: {
-        color: '#fff',
-        fontSize: sizeScale(10),
-        fontWeight: '600',
-    },
     // --- Details ---
     detailsContainer: {
         marginTop: sizeScale(24),
         marginHorizontal: sizeScale(16),
         backgroundColor: '#000',
         paddingVertical: sizeScale(8),
+    },
+    sectionHeader: {
+        marginBottom: sizeScale(16),
+        borderBottomWidth: 1,
+        borderBottomColor: '#1F2937',
+        paddingBottom: sizeScale(8),
+    },
+    sectionTitle: {
+        color: COLORS.textWhite,
+        fontSize: sizeScale(16),
+        fontWeight: '600',
     },
     detailRow: {
         flexDirection: 'row',

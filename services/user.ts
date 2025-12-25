@@ -95,6 +95,23 @@ export interface SearchResult {
   products: Product[];
 }
 
+// services/user.ts
+
+export interface LeadQuotaData {
+  totalLeadQuota: number;
+  consumedLeads: number;
+  remainingLeads: number;
+  postingQuota: number;
+  postedLeads: number;
+  remainingPosts: number;
+  nextResetDate: string;
+  daysUntilReset: number;
+  referralCode: string;
+  referralInfo: string;
+}
+
+
+
 // API Response wrapper interface
 interface ApiResponse<T> {
   statusCode: number;
@@ -117,6 +134,13 @@ export const companyAPI = {
       true
     );
     return response.data;
+  },
+
+  /**
+   * Get lead quota details
+   */
+  getLeadQuota: async (): Promise<ApiResponse<LeadQuotaData>> => {
+    return apiCall('companies/lead-quota');
   },
 
   // Get public company profile by ID (public - no auth required)
@@ -196,6 +220,7 @@ export const followersAPI = {
     );
     return response.data;
   },
+
 
   // Follow a company
   followCompany: async (companyId: string): Promise<any> => {

@@ -43,3 +43,9 @@
 git add .
    git commit -m "Remove native code to use Prebuild"
    eas build --platform android --profile preview
+
+=============================
+
+https://claude.ai/share/ba23905f-588d-444f-a9ad-8912ecbef7ed
+
+=====> for deeplink sharing
