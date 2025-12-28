@@ -894,28 +894,28 @@
 // });
 
 // app/(app)/bizzapai/index.tsx
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Modal,
-  Image,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  KeyboardAvoidingView,
-  useWindowDimensions,
-  StatusBar,
-} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { aiAPI, ExtractedLeadData } from '../../../services/ai';
 import { leadsAPI } from '../../../services/leads';
 
@@ -943,6 +943,25 @@ export default function BizzapAIScreen() {
   const [editableLocation, setEditableLocation] = useState('');
   const [editableBudget, setEditableBudget] = useState('');
 
+  // const handleImagePicker = async () => {
+  //   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  //   if (!permission.granted) {
+  //     Alert.alert('Permission Required', 'We need access to your photos.');
+  //     return;
+  //   }
+
+  //   const result = await ImagePicker.launchImageLibraryAsync({
+  //     mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //     allowsEditing: true,
+  //     aspect: [4, 3],
+  //     quality: 0.8,
+  //   });
+
+  //   if (!result.canceled && result.assets[0]) {
+  //     setUploadedImage(result.assets[0]);
+  //   }
+  // };
+
   const handleImagePicker = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -951,17 +970,54 @@ export default function BizzapAIScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'], // Updated syntax
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.8,
+      quality: 0.5, // Reduced quality to 0.5 to compress image
+      allowsMultipleSelection: false,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setUploadedImage(result.assets[0]);
+      const asset = result.assets[0];
+      
+      // Check file size (if available)
+      if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) { // 5MB limit
+        Alert.alert(
+          'Image Too Large',
+          'Please select an image smaller than 5MB.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+      
+      // Ensure we have proper MIME type
+      const uri = asset.uri;
+      const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      let mimeType = asset.mimeType || asset.type;
+      
+      // Fix MIME type if needed
+      if (!mimeType || mimeType === 'image') {
+        if (fileExtension === 'jpg' || fileExtension === 'jpeg') {
+          mimeType = 'image/jpeg';
+        } else if (fileExtension === 'png') {
+          mimeType = 'image/png';
+        } else if (fileExtension === 'gif') {
+          mimeType = 'image/gif';
+        } else if (fileExtension === 'webp') {
+          mimeType = 'image/webp';
+        } else {
+          mimeType = 'image/jpeg';
+        }
+      }
+      
+      setUploadedImage({
+        ...asset,
+        mimeType: mimeType,
+        type: mimeType,
+      });
     }
   };
-
+  
   const handleCancelImage = () => {
     setUploadedImage(null);
   };
@@ -1707,15 +1763,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
   },
+  modalSafeArea: {
+    maxHeight: '90%',
+    width: '100%',
+  },
   modalContent: {
     backgroundColor: '#0F1723',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    flex: 1,
   },
   modalHeader: {
-    marginBottom: 20,
+    marginBottom: 16,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#1c283c',
@@ -1735,10 +1796,10 @@ const styles = StyleSheet.create({
   },
   previewScroll: {
     flex: 1,
-    marginBottom: 16,
+    
   },
   previewScrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   leadCardPreview: {
     backgroundColor: '#121924',
@@ -1830,9 +1891,12 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
+    gap: 12,
     paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 16,
     borderTopWidth: 1,
     borderTopColor: '#1c283c',
+    backgroundColor: '#0F1723',
   },
   doAgainButton: {
     flex: 1,

@@ -209,11 +209,11 @@
 
 
 // services/leads.ts
-import { apiCall, uploadFile } from './apiClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Config } from '../constants/config';
 import { Platform } from 'react-native';
+import { Config } from '../constants/config';
+import { apiCall, uploadFile } from './apiClient';
 
 // --- Interfaces ---
 
@@ -344,30 +344,53 @@ export const leadsAPI = {
 
       const formData = new FormData();
       
-      // Add text fields
-      formData.append('title', data.title);
-      formData.append('description', data.description);
-      formData.append('budget', data.budget || '');
-      formData.append('quantity', data.quantity || '');
-      formData.append('location', data.location || '');
+      // Add text fields - ensure they're strings
+      formData.append('title', String(data.title).trim());
+      formData.append('description', String(data.description || '').trim());
+      formData.append('budget', String(data.budget || '').trim());
+      formData.append('quantity', String(data.quantity || '').trim());
+      formData.append('location', String(data.location || '').trim());
       
-      // Handle image for Android
+      // Handle image for Android with proper formatting
       if (data.image) {
+        const uri = data.image.uri;
+        const uriParts = uri.split('.');
+        const fileType = uriParts[uriParts.length - 1].toLowerCase();
+        
+        // Determine proper MIME type
+        let mimeType = data.image.mimeType || data.image.type;
+        
+        // If type is just "image", fix it to proper MIME type
+        if (!mimeType || mimeType === 'image') {
+          if (fileType === 'jpg' || fileType === 'jpeg') {
+            mimeType = 'image/jpeg';
+          } else if (fileType === 'png') {
+            mimeType = 'image/png';
+          } else if (fileType === 'gif') {
+            mimeType = 'image/gif';
+          } else if (fileType === 'webp') {
+            mimeType = 'image/webp';
+          } else {
+            mimeType = 'image/jpeg'; // Default fallback
+          }
+        }
+        
         const imageData: any = {
-          uri: data.image.uri,
-          type: data.image.type || data.image.mimeType || 'image/jpeg',
-          name: data.image.name || data.image.fileName || `lead_${Date.now()}.jpg`,
+          uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+          type: mimeType,
+          name: data.image.fileName || data.image.name || `lead_${Date.now()}.${fileType}`,
         };
         
-        formData.append('image', imageData);
+        console.log('Appending image with proper MIME type:', imageData);
+        formData.append('image', imageData as any);
       }
 
-      console.log('Creating lead with FormData:', {
+      console.log('Creating lead with data:', {
         title: data.title,
-        description: data.description,
-        budget: data.budget,
-        quantity: data.quantity,
-        location: data.location,
+        hasDescription: !!data.description,
+        hasBudget: !!data.budget,
+        hasQuantity: !!data.quantity,
+        hasLocation: !!data.location,
         hasImage: !!data.image,
       });
 
@@ -377,23 +400,44 @@ export const leadsAPI = {
           'Content-Type': 'multipart/form-data',
           'Accept': 'application/json',
         },
-        timeout: 30000, // 30 second timeout
+        timeout: 60000, // Increased to 60 seconds for image upload
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
       });
 
-      console.log('Lead creation response:', response.data);
+      console.log('Lead creation successful:', response.data);
       return response.data;
     } catch (error: any) {
       console.error('Create Lead Error:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       
       if (error.response) {
-        const errorMessage = error.response.data?.message || 
-                            error.response.data?.errors?.[0]?.message ||
-                            `Server error: ${error.response.status}`;
-        throw new Error(errorMessage);
+        const status = error.response.status;
+        const errorData = error.response.data;
+        
+        if (status === 413) {
+          throw new Error('Image file is too large. Please select a smaller image (max 5MB).');
+        } else if (status === 400) {
+          const errorMessage = errorData?.message || 
+                              errorData?.errors?.[0]?.message ||
+                              'Invalid input. Please check all fields.';
+          throw new Error(errorMessage);
+        } else if (status === 401) {
+          throw new Error('Session expired. Please log in again.');
+        } else if (status === 403) {
+          throw new Error('You do not have permission to create leads.');
+        } else {
+          const errorMessage = errorData?.message || `Server error: ${status}`;
+          throw new Error(errorMessage);
+        }
       } else if (error.request) {
-        throw new Error('Network error: Unable to reach server. Please check your internet connection.');
+        console.error('No response received:', error.request);
+        throw new Error('Network error: Unable to reach server. Please check your internet connection and try again.');
+      } else if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timed out. Please check your connection and try again.');
       } else {
-        throw new Error(error.message || 'Failed to create lead');
+        throw new Error(error.message || 'Failed to create lead. Please try again.');
       }
     }
   },
