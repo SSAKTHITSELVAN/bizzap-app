@@ -1,5 +1,3 @@
-// app/(app)/dashboard/index.tsx
-
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, 
@@ -16,7 +14,7 @@ import {
   Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AlertTriangle, Gift, X } from 'lucide-react-native';
+import { AlertTriangle, Gift, X, Search } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -75,25 +73,20 @@ export default function DashboardScreen() {
       const url = event.url;
       console.log('Deep link received in dashboard:', url);
       
-      // Parse leadId from URL: bizzap://dashboard?leadId=xxx or https://bizzap.app/dashboard?leadId=xxx
       const leadIdMatch = url.match(/[?&]leadId=([a-zA-Z0-9-]+)/);
       
       if (leadIdMatch && leadIdMatch[1]) {
         const leadId = leadIdMatch[1];
         console.log('Extracted leadId:', leadId);
         
-        // Fetch lead details from public API
         try {
           const response = await leadsAPI.getLeadById(leadId);
           
           if (response.status === 'success') {
             const sharedLead = response.data;
-            
-            // Check if lead is already in the available leads list
             const leadIndex = leads.findIndex(l => l.id === leadId);
             
             if (leadIndex !== -1) {
-              // Lead exists in list - scroll to it and highlight
               setHighlightedLeadId(leadId);
               
               setTimeout(() => {
@@ -104,13 +97,11 @@ export default function DashboardScreen() {
                 });
               }, 500);
               
-              // Remove highlight after 3 seconds
               setTimeout(() => {
                 setHighlightedLeadId(null);
               }, 3500);
               
             } else {
-              // Lead not in available list (might be consumed or posted by user)
               Alert.alert(
                 'Lead Not Available',
                 `This lead "${sharedLead.title}" is no longer available in your feed. It may have been consumed or posted by you.`,
@@ -129,22 +120,19 @@ export default function DashboardScreen() {
       }
     };
 
-    // Get initial URL (app opened via link)
     Linking.getInitialURL().then((url) => {
       if (url) {
         handleDeepLink({ url });
       }
     });
 
-    // Listen for incoming links (app already open)
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
       subscription.remove();
     };
-  }, [leads]); // Re-run when leads change
+  }, [leads]);
 
-  // --- Handle leadId from URL params (Expo Router) ---
   useEffect(() => {
     if (params.leadId && typeof params.leadId === 'string') {
       const leadId = params.leadId;
@@ -233,6 +221,10 @@ export default function DashboardScreen() {
     }
   };
 
+  const handleSearchPress = () => {
+    router.push('/(app)/search');
+  };
+
   const renderHeader = () => {
     if (!quotaData) return null;
 
@@ -288,7 +280,6 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.leadsHeaderSection}>
-          <Text style={styles.leadsHeaderTitle}>Available Leads</Text>
           <Text style={styles.leadsHeaderCount}>{leads.length} Leads</Text>
         </View>
       </View>
@@ -357,7 +348,6 @@ export default function DashboardScreen() {
           </View>
         }
         onScrollToIndexFailed={(info) => {
-          // Fallback if scroll fails
           console.log('Scroll to index failed:', info);
           setTimeout(() => {
             flatListRef.current?.scrollToOffset({
@@ -424,12 +414,32 @@ const styles = StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: '#121924',
-    paddingTop: sizeScale(140),
+    paddingTop: sizeScale(100),
   },
   headerArea: { 
     paddingHorizontal: sizeScale(16), 
     paddingTop: sizeScale(8),
     backgroundColor: '#121924',
+  },
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: sizeScale(12),
+  },
+  dashboardTitle: {
+    fontSize: sizeScale(24),
+    fontWeight: '700',
+    color: '#FFF',
+    fontFamily: 'Outfit',
+  },
+  searchIconButton: {
+    width: sizeScale(40),
+    height: sizeScale(40),
+    borderRadius: sizeScale(20),
+    backgroundColor: 'rgba(0, 87, 217, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   warningBanner: {
     flexDirection: 'row',
@@ -579,18 +589,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   leadsHeaderSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingVertical: sizeScale(16),
     borderBottomWidth: 1,
     borderBottomColor: '#30363D',
-  },
-  leadsHeaderTitle: {
-    fontSize: sizeScale(18),
-    fontWeight: '600',
-    color: '#FFF',
-    fontFamily: 'Outfit',
   },
   leadsHeaderCount: {
     fontSize: sizeScale(14),

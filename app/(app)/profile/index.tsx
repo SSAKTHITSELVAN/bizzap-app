@@ -104,8 +104,17 @@ export default function ProfileScreen() {
                     text: "Logout",
                     style: "destructive",
                     onPress: async () => {
-                        if (logout) await logout();
-                        router.replace('/(auth)/phone-entry');
+                        try {
+                            if (logout) {
+                                await logout();
+                            }
+                            // Navigate to phone entry screen
+                            router.replace('/(auth)/phone-entry');
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                            // Still navigate even if logout fails
+                            router.replace('/(auth)/phone-entry');
+                        }
                     }
                 }
             ]
@@ -195,14 +204,14 @@ export default function ProfileScreen() {
                         icon={<Image source={require('../../../assets/images/react-logo.png')} style={styles.bizzapLogo} resizeMode='contain' /> || <Text style={styles.logoText}>b</Text>}
                         title="About Bizzap"
                         subtitle="Terms, policies and app versions"
-                        onPress={() => handleExternalLink('https://bizzap.com/about')}
+                        onPress={() => handleExternalLink('https://bizzap.app/about')}
                     />
 
                     <InfoBlock
                         icon={<Feather name="headphones" size={sizeScale(24)} color="#0057D9" />}
                         title="Help Center"
                         subtitle="Get assistance and Support"
-                        onPress={() => handleExternalLink('https://bizzap.com/support')}
+                        onPress={() => handleExternalLink('https://bizzap.app/support')}
                     />
                 </View>
 

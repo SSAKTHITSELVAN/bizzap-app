@@ -9,14 +9,15 @@ import {
     Image,
     StatusBar,
     Share,
-    ActivityIndicator
+    ActivityIndicator,
+    ImageBackground
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { companyAPI, followersAPI } from '../../../services/user';
-import { leadsAPI } from '../../../services/leads';
+import { companyAPI } from '../../../services/user';
 
 // --- Responsive Sizing Utility ---
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -24,23 +25,18 @@ const STANDARD_WIDTH = 390;
 const sizeScale = (size: number): number => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
 
 // --- Assets & Constants ---
-const PLACEHOLDER_AVATAR = 'https://via.placeholder.com/150/1a1a1a/666?text=User';
-// Using a darker placeholder so it doesn't blend into the white text if image fails
-const PLACEHOLDER_COVER = 'https://via.placeholder.com/390x150/0F1115/333333?text=Cover';
+const DEFAULT_COVER = 'https://via.placeholder.com/390x200/000000/000000?text='; 
+const PLACEHOLDER_AVATAR = 'https://via.placeholder.com/150/1a1a1a/666?text=Logo';
 
-// Define Colors
+// Colors from the design
 const COLORS = {
     bg: '#000000',
-    cardBg: '#0F1115',
-    iconColor: '#8FA8CC',
+    cardBg: '#0A0A0A',
+    cardBorder: '#1F1F1F',
     textWhite: '#FFFFFF',
-    textBlue: '#589AFD',
-    orange: '#FF7A00',
-    orangeBg: 'rgba(255, 122, 0, 0.18)',
-    orangeBorder: 'rgba(255, 122, 0, 0.4)',
-    badgeRed: '#F54900',
-    cardBorder: 'rgba(120, 120, 120, 0.2)',
-    glassBg: 'rgba(255, 255, 255, 0.04)',
+    textGrey: '#888888',
+    cyan: '#00E0FF', // Glow color
+    blueLink: '#2980b9'
 };
 
 export default function AccountsCenterScreen() {
@@ -48,7 +44,6 @@ export default function AccountsCenterScreen() {
     const { user, refreshUser } = useAuth();
     const [loading, setLoading] = useState(true);
     const [profileData, setProfileData] = useState<any>(null);
-    const [counts, setCounts] = useState({ followers: 0, following: 0, leads: 0 });
 
     useFocusEffect(
         React.useCallback(() => {
@@ -59,18 +54,10 @@ export default function AccountsCenterScreen() {
     const loadAllData = async () => {
         try {
             setLoading(true);
-            const [profileRes, followersRes, followingRes, leadsRes] = await Promise.all([
-                companyAPI.getProfile(),
-                followersAPI.getFollowers(),
-                followersAPI.getFollowing(),
-                leadsAPI.getMyLeads()
-            ]);
+            // Removed followers/following/leads APIs as stats are no longer displayed
+            const profileRes = await companyAPI.getProfile();
             setProfileData(profileRes);
-            setCounts({
-                followers: followersRes?.length || 0,
-                following: followingRes?.length || 0,
-                leads: leadsRes?.data?.length || 0
-            });
+            
             if (refreshUser) await refreshUser();
         } catch (error) {
             console.error('Data load error:', error);
@@ -93,15 +80,15 @@ export default function AccountsCenterScreen() {
     };
 
     const displayData = profileData || user || {};
-    
-    // --- Image Logic ---
     const avatarImage = displayData.logo || displayData.userPhoto || PLACEHOLDER_AVATAR;
-    const coverImage = displayData.coverImage || PLACEHOLDER_COVER;
+    
+    const hasCustomCover = !!displayData.coverImage;
+    const coverImageSource = hasCustomCover ? { uri: displayData.coverImage } : { uri: DEFAULT_COVER };
 
     if (loading && !profileData) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0057D9" />
+                <ActivityIndicator size="large" color={COLORS.cyan} />
             </View>
         );
     }
@@ -110,150 +97,134 @@ export default function AccountsCenterScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
+            {/* Simulated Grid Background */}
+            <View style={styles.gridBackground}>
+                {/* Vertical Lines */}
+                {[...Array(10)].map((_, i) => (
+                    <View key={`v-${i}`} style={[styles.gridLineVertical, { left: i * (SCREEN_WIDTH / 8) }]} />
+                ))}
+                {/* Horizontal Lines */}
+                {[...Array(15)].map((_, i) => (
+                    <View key={`h-${i}`} style={[styles.gridLineHorizontal, { top: i * 60 }]} />
+                ))}
+            </View>
+
             <ScrollView 
                 style={styles.scrollView} 
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
             >
-                {/* --- 1. Top Section (Cover + Back Button) --- */}
-                <View style={styles.coverSection}>
-                    {/* Key prop forces re-render if URL changes */}
-                    <Image 
-                        source={{ uri: coverImage }} 
-                        style={styles.coverImage} 
-                        resizeMode="cover" 
-                        key={coverImage}
-                    />
-                    
-                    {/* Back Button with High Z-Index */}
-                    <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
-                        <Feather name="chevron-left" size={sizeScale(28)} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* --- 2. Main Depth Frame (Profile Card) --- */}
-                <View style={styles.depthFrame}>
-                    <View style={styles.cardBackground}>
+                {/* --- HEADER SECTION --- */}
+                <View style={styles.headerContainer}>
+                    {/* Header Image / Horizon */}
+                    <View style={styles.horizonWrapper}>
+                        {hasCustomCover ? (
+                            <Image source={coverImageSource} style={styles.coverImage} resizeMode="cover" />
+                        ) : (
+                            // CSS-based Planet Horizon Simulation
+                            <View style={styles.simulatedHorizonContainer}>
+                                <LinearGradient
+                                    colors={['rgba(0,0,0,1)', '#001a33', '#003366', '#000000']}
+                                    locations={[0, 0.4, 0.8, 1]}
+                                    style={styles.horizonGradient}
+                                />
+                                <View style={styles.glowingArc} />
+                            </View>
+                        )}
                         
-                        {/* Icons */}
-                        <TouchableOpacity style={styles.iconEdit} onPress={handleEdit}>
-                            <MaterialCommunityIcons name="pencil-outline" size={sizeScale(22)} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.iconShare} onPress={handleShare}>
-                            <Ionicons name="share-social-outline" size={sizeScale(22)} color="#fff" />
-                        </TouchableOpacity>
+                        {/* Overlay to blend bottom into black */}
+                        <LinearGradient
+                            colors={['transparent', 'rgba(0,0,0,0.8)', '#000000']}
+                            style={styles.bottomFade}
+                        />
+                    </View>
 
-                        {/* Avatar */}
-                        <View style={styles.avatarContainer}>
-                            <Image 
-                                source={{ uri: avatarImage }} 
-                                style={styles.avatar} 
-                                resizeMode="cover"
-                                key={avatarImage}
+                    {/* Navbar Buttons */}
+                    <View style={styles.navbar}>
+                        <TouchableOpacity onPress={handleBack} style={styles.navButton}>
+                            <Feather name="chevron-left" size={24} color="#fff" />
+                        </TouchableOpacity>
+                        <View style={styles.navActions}>
+                            <TouchableOpacity onPress={handleEdit} style={styles.navButton}>
+                                <Feather name="edit-2" size={20} color="#fff" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleShare} style={styles.navButton}>
+                                <Ionicons name="share-social-outline" size={22} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Avatar - Centered & Overlapping Horizon */}
+                    <View style={styles.avatarSection}>
+                        <View style={styles.avatarWrapper}>
+                            <Image source={{ uri: avatarImage }} style={styles.avatar} />
+                            {/* Inner Shine Effect */}
+                            <LinearGradient
+                                colors={['rgba(255,255,255,0.1)', 'transparent']}
+                                style={StyleSheet.absoluteFill}
                             />
                         </View>
-
                         <TouchableOpacity onPress={handleEdit}>
                             <Text style={styles.changeProfileText}>Change Profile</Text>
                         </TouchableOpacity>
+                    </View>
+                </View>
 
-                        {/* Info Glass Box */}
-                        <View style={styles.glassInfoBox}>
-                            <View style={styles.infoColumn}>
-                                <Text style={styles.label}>Company Name</Text>
-                                <Text style={styles.valueLarge} numberOfLines={1}>
-                                    {displayData.companyName || 'Company Name'}
-                                </Text>
+                {/* --- MAIN CARD (Updated: Removed Stats Row) --- */}
+                <View style={styles.cardContainer}>
+                    <LinearGradient
+                        colors={[COLORS.cardBorder, 'transparent']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 0.5 }}
+                        style={styles.cardBorderGradient}
+                    >
+                        <View style={styles.cardInner}>
+                            {/* Row 1: Names Only */}
+                            <View style={styles.namesRow}>
+                                <View style={styles.nameCol}>
+                                    <Text style={styles.labelSmall}>Company Name</Text>
+                                    <Text style={styles.nameText} numberOfLines={2}>
+                                        {displayData.companyName || 'Company Name'}
+                                    </Text>
+                                </View>
+                                <View style={styles.verticalDivider} />
+                                <View style={styles.nameCol}>
+                                    <Text style={styles.labelSmall}>User Name</Text>
+                                    <Text style={styles.nameText} numberOfLines={2}>
+                                        {displayData.userName || 'User Name'}
+                                    </Text>
+                                </View>
                             </View>
 
-                            <View style={styles.verticalLine} />
-
-                            <View style={styles.infoColumn}>
-                                <Text style={styles.label}>User Name</Text>
-                                <Text style={styles.valueLarge} numberOfLines={1}>
-                                    {displayData.userName || 'User Name'}
-                                </Text>
-                            </View>
+                            {/* Removed Horizontal Divider & Stats Row */}
                         </View>
+                    </LinearGradient>
+                </View>
+
+                {/* --- DETAILS LIST --- */}
+                <View style={styles.detailsList}>
+                    <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>GST Number</Text>
+                        <Text style={styles.detailValue}>{displayData.gstNumber || '2357AGYHF123568'}</Text>
+                    </View>
+                    <View style={styles.detailDivider} />
+
+                    <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>PAN</Text>
+                        <Text style={styles.detailValue}>{displayData.panNumber || 'JPR56478'}</Text>
+                    </View>
+                    <View style={styles.detailDivider} />
+
+                    <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>Address</Text>
+                        <Text style={styles.detailValue} numberOfLines={2}>
+                            {displayData.address || '123, MG Road, Chennai - 600001'}
+                        </Text>
                     </View>
                 </View>
 
-                {/* --- 3. Organisation Users Row --- */}
-                <View style={styles.orgUsersRow}>
-                    <View style={styles.orgFrame}>
-                        <Text style={styles.orgLabel}>12 Organisation Users</Text>
-                        
-                        <View style={styles.avatarStack}>
-                            <View style={[styles.stackCircle, { right: 0, zIndex: 1, backgroundColor: '#333' }]}>
-                                <Text style={styles.stackCount}>12</Text>
-                            </View>
-                            <View style={[styles.stackCircle, { right: 18, zIndex: 2, backgroundColor: '#555' }]} />
-                            <View style={[styles.stackCircle, { right: 36, zIndex: 3, backgroundColor: '#777' }]} />
-                            <Image 
-                                source={{ uri: avatarImage }} 
-                                style={[styles.stackCircle, { right: 54, zIndex: 4, backgroundColor: '#999' }]} 
-                                key={avatarImage + 'mini'}
-                            />
-                        </View>
-                    </View>
-                </View>
-
-                {/* --- 4. Access Requests Button --- */}
-                <View style={styles.buttonWrapper}>
-                    <TouchableOpacity style={styles.accessButton} activeOpacity={0.8}>
-                        <View style={styles.accessContent}>
-                            <Feather name="box" size={sizeScale(16)} color="#E1E8F0" />
-                            <Text style={styles.accessText}>12 New Access Requests</Text>
-                        </View>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>New</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* --- 5. Details Section --- */}
-                <View style={styles.detailsContainer}>
-                    <View style={styles.detailRow}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>GST Number</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{displayData.gstNumber || 'Not Provided'}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>PAN</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{displayData.panNumber || 'Not Provided'}</Text>
-                        </View>
-                    </View>
-
-                     <View style={styles.detailRow}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>Phone Number</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{displayData.phoneNumber || 'Not Provided'}</Text>
-                        </View>
-                    </View>
-
-                    <View style={[styles.detailRow, { borderTopWidth: 1, borderTopColor: COLORS.cardBorder }]}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>Address</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue} numberOfLines={3}>
-                                {displayData.address || 'No address provided'}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={{ height: sizeScale(40) }} />
+                <View style={{ height: 40 }} />
             </ScrollView>
         </View>
     );
@@ -270,233 +241,210 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    // --- Background Grid ---
+    gridBackground: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: -1,
+        opacity: 0.1,
+    },
+    gridLineVertical: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        width: 1,
+        backgroundColor: '#333',
+    },
+    gridLineHorizontal: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: 1,
+        backgroundColor: '#333',
+    },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
         paddingBottom: sizeScale(40),
     },
-    // --- Cover Section ---
-    coverSection: {
-        height: sizeScale(150), // Increased height to prevent full hiding
+    
+    // --- Header & Horizon ---
+    headerContainer: {
         width: '100%',
+        height: sizeScale(240),
         position: 'relative',
-        zIndex: 0,
+    },
+    horizonWrapper: {
+        width: '100%',
+        height: sizeScale(180),
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        zIndex: 1,
     },
     coverImage: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#1a1a1a', // Shows if image loads slowly
     },
-    backButton: {
-        position: 'absolute',
-        top: sizeScale(50), // Adjusted for typical Status Bar
-        left: sizeScale(16),
-        width: sizeScale(40),
-        height: sizeScale(40),
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.3)', 
-        borderRadius: sizeScale(20),
-        zIndex: 20, // Critical: Keeps button above everything
-    },
-    // --- Depth Frame ---
-    depthFrame: {
-        marginTop: sizeScale(-75), // Exact 50% overlap of 150px height
-        paddingHorizontal: sizeScale(16),
+    simulatedHorizonContainer: {
         width: '100%',
-        zIndex: 1,
-        position: 'relative',
-    },
-    cardBackground: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: sizeScale(8),
-        paddingTop: sizeScale(18),
-        paddingBottom: sizeScale(16),
+        height: '100%',
+        backgroundColor: '#000',
+        overflow: 'hidden',
         alignItems: 'center',
-        position: 'relative',
-        borderWidth: 1,
-        borderColor: '#1F2937',
     },
-    iconEdit: {
+    horizonGradient: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    glowingArc: {
+        width: SCREEN_WIDTH * 1.5,
+        height: SCREEN_WIDTH * 1.5,
+        borderRadius: SCREEN_WIDTH,
+        borderTopWidth: 2,
+        borderColor: 'rgba(60, 150, 255, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
         position: 'absolute',
-        top: sizeScale(16),
-        right: sizeScale(50),
+        top: sizeScale(80),
+        shadowColor: '#0088ff',
+        shadowOpacity: 0.8,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    bottomFade: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: sizeScale(60),
+        zIndex: 2,
+    },
+    
+    // --- Navbar ---
+    navbar: {
+        position: 'absolute',
+        top: sizeScale(40),
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: sizeScale(16),
         zIndex: 10,
     },
-    iconShare: {
-        position: 'absolute',
-        top: sizeScale(16),
-        right: sizeScale(16),
-        zIndex: 10,
+    navButton: {
+        padding: 8,
     },
-    // --- Avatar ---
-    avatarContainer: {
+    navActions: {
+        flexDirection: 'row',
+        gap: 16,
+    },
+
+    // --- Avatar Section ---
+    avatarSection: {
+        position: 'absolute',
+        top: sizeScale(100),
+        width: '100%',
+        alignItems: 'center',
+        zIndex: 20,
+    },
+    avatarWrapper: {
         width: sizeScale(100),
         height: sizeScale(100),
         borderRadius: sizeScale(50),
-        borderWidth: 4,
-        borderColor: '#000',
-        overflow: 'hidden',
-        marginBottom: sizeScale(8),
-        backgroundColor: '#1a1a1a', 
+        borderWidth: 2,
+        borderColor: COLORS.cyan,
+        backgroundColor: '#000',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: COLORS.cyan,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 10,
+        marginBottom: sizeScale(10),
     },
     avatar: {
-        width: '100%',
-        height: '100%',
-        borderRadius: sizeScale(50),
+        width: sizeScale(92),
+        height: sizeScale(92),
+        borderRadius: sizeScale(46),
     },
     changeProfileText: {
-        color: COLORS.textBlue,
-        fontSize: sizeScale(14),
+        color: COLORS.blueLink,
+        fontSize: sizeScale(13),
         fontWeight: '500',
-        marginBottom: sizeScale(16),
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
-    // --- Glass Info Box ---
-    glassInfoBox: {
-        width: '92%',
-        backgroundColor: COLORS.glassBg,
-        borderRadius: sizeScale(10),
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        flexDirection: 'row',
-        padding: sizeScale(12),
+
+    // --- Main Card ---
+    cardContainer: {
+        marginTop: sizeScale(10),
+        marginHorizontal: sizeScale(16),
+        borderRadius: sizeScale(16),
+        zIndex: 5,
     },
-    infoColumn: {
-        flex: 1,
-        paddingHorizontal: sizeScale(4),
+    cardBorderGradient: {
+        borderRadius: sizeScale(16),
+        padding: 1, // Border width
     },
-    verticalLine: {
-        width: 1,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        height: '80%',
-        alignSelf: 'center',
-    },
-    label: {
-        color: COLORS.iconColor,
-        fontSize: sizeScale(12),
-        marginBottom: sizeScale(2),
-    },
-    valueLarge: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(16),
-        fontWeight: '600',
-    },
-    // --- Org Users ---
-    orgUsersRow: {
+    cardInner: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: sizeScale(15),
+        paddingVertical: sizeScale(20),
         paddingHorizontal: sizeScale(16),
-        marginTop: sizeScale(20),
-        width: '100%',
     },
-    orgFrame: {
+    namesRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
-        borderRadius: sizeScale(8),
-        padding: sizeScale(12),
-        backgroundColor: '#000',
+        // marginBottom removed since stats are gone
     },
-    orgLabel: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(14),
-        fontWeight: '500',
+    nameCol: {
+        flex: 1,
+        paddingHorizontal: 8,
     },
-    avatarStack: {
-        width: sizeScale(80),
-        height: sizeScale(24),
-        position: 'relative',
+    verticalDivider: {
+        width: 1,
+        backgroundColor: '#333',
+        height: '100%',
     },
-    stackCircle: {
-        width: sizeScale(24),
-        height: sizeScale(24),
-        borderRadius: sizeScale(12),
-        borderWidth: 1,
-        borderColor: '#fff',
-        position: 'absolute',
-        top: 0,
-        justifyContent: 'center',
-        alignItems: 'center',
+    labelSmall: {
+        color: '#666',
+        fontSize: sizeScale(11),
+        marginBottom: 4,
     },
-    stackCount: {
+    nameText: {
         color: '#fff',
-        fontSize: sizeScale(9),
+        fontSize: sizeScale(15),
         fontWeight: '700',
     },
-    // --- Access Button ---
-    buttonWrapper: {
-        paddingHorizontal: sizeScale(16),
-        marginTop: sizeScale(20),
-        width: '100%',
-        alignItems: 'center',
-    },
-    accessButton: {
-        width: '100%',
-        height: sizeScale(40),
-        backgroundColor: COLORS.orangeBg,
-        borderRadius: sizeScale(8),
-        borderWidth: 1,
-        borderColor: COLORS.orangeBorder,
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-    },
-    accessContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: sizeScale(8),
-    },
-    accessText: {
-        color: '#E1E8F0',
-        fontSize: sizeScale(14),
-        fontWeight: '400',
-    },
-    badge: {
-        position: 'absolute',
-        top: sizeScale(-10),
-        right: sizeScale(24),
-        backgroundColor: COLORS.badgeRed,
-        paddingHorizontal: sizeScale(6),
-        paddingVertical: sizeScale(2),
-        borderRadius: sizeScale(4),
-    },
-    badgeText: {
-        color: '#fff',
-        fontSize: sizeScale(10),
-        fontWeight: '600',
-    },
-    // --- Details ---
-    detailsContainer: {
+    
+    // --- Details List ---
+    detailsList: {
         marginTop: sizeScale(24),
-        marginHorizontal: sizeScale(16),
-        backgroundColor: '#000',
-        paddingVertical: sizeScale(8),
+        paddingHorizontal: sizeScale(24),
     },
-    detailRow: {
+    detailItem: {
         flexDirection: 'row',
-        borderTopWidth: 1,
-        borderTopColor: COLORS.cardBorder,
-        paddingVertical: sizeScale(14),
+        justifyContent: 'space-between',
         alignItems: 'flex-start',
-    },
-    detailLabelCol: {
-        width: sizeScale(100),
-    },
-    detailValueCol: {
-        flex: 1,
-        alignItems: 'flex-end',
+        paddingVertical: sizeScale(12),
     },
     detailLabel: {
-        color: COLORS.iconColor,
-        fontSize: sizeScale(14),
-        fontWeight: '400',
+        color: '#666',
+        fontSize: sizeScale(13),
+        fontWeight: '500',
+        flex: 0.35,
     },
     detailValue: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(14),
-        fontWeight: '400',
+        color: '#fff',
+        fontSize: sizeScale(13),
+        fontWeight: '500',
         textAlign: 'right',
-        lineHeight: sizeScale(20),
+        flex: 0.65,
+    },
+    detailDivider: {
+        height: 1,
+        backgroundColor: '#1F1F1F',
+        width: '100%',
     },
 });

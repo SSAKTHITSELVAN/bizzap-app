@@ -11,9 +11,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  StatusBar
+  StatusBar,
+  Linking
 } from 'react-native';
-import { Image } from 'expo-image'; // Recommended for SVGs/Images in Expo
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 
@@ -60,6 +61,12 @@ const PhoneEntryPage = () => {
     }
   };
 
+  const handleOpenPolicies = () => {
+    Linking.openURL('https://bizzap.app/polices').catch(err => 
+      console.error('Failed to open URL:', err)
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0E11" />
@@ -75,7 +82,7 @@ const PhoneEntryPage = () => {
             <Text style={styles.brandText}>bizzap</Text>
           </View>
 
-          {/* 2. Illustration Area - Using the provided SVG URL */}
+          {/* 2. Illustration Area */}
           <View style={styles.illustrationContainer}>
             <Image 
               source={{ uri: "https://image2url.com/images/1765428466632-f867d4de-c2ed-4ff3-b83b-acbc69a597fa.svg" }} 
@@ -115,7 +122,10 @@ const PhoneEntryPage = () => {
           {/* 4. Bottom Section (Policy + Button) */}
           <View style={styles.bottomContainer}>
             <Text style={styles.policyText}>
-              By continuing, you agree to our <Text style={styles.linkText}>Terms & Privacy Policy</Text>.
+              By continuing, you agree to our{' '}
+              <Text style={styles.linkText} onPress={handleOpenPolicies}>
+                Terms & Privacy Policy
+              </Text>.
             </Text>
 
             <TouchableOpacity
@@ -143,7 +153,7 @@ export default PhoneEntryPage;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0B0E11', // Dark background matching image
+    backgroundColor: '#0B0E11',
   },
   container: {
     flex: 1,
@@ -158,7 +168,7 @@ const styles = StyleSheet.create({
   // Header
   brandHeader: {
     alignItems: 'center',
-    paddingTop: 40, // Increased padding for better spacing
+    paddingTop: 40,
   },
   brandText: {
     fontSize: 22,
@@ -175,7 +185,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   illustration: {
-    width: 280, // Slightly larger width for better visibility
+    width: 280,
     height: 280,
   },
 
@@ -192,11 +202,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   titleHighlight: {
-    color: '#A5B4FC', // Light periwinkle highlight for "Bizzap"
+    color: '#A5B4FC',
   },
   subtitle: {
     fontSize: 15,
-    color: '#9CA3AF', // Gray-400
+    color: '#9CA3AF',
     textAlign: 'center',
     marginBottom: 32,
   },
@@ -205,10 +215,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1D21', // Darker input background
+    backgroundColor: '#1A1D21',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151', // Gray border
+    borderColor: '#374151',
     height: 56,
     paddingHorizontal: 16,
   },
@@ -220,7 +230,7 @@ const styles = StyleSheet.create({
   verticalDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#4B5563', // Divider color
+    backgroundColor: '#4B5563',
     marginHorizontal: 12,
   },
   input: {
@@ -252,12 +262,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   linkText: {
-    color: '#3B82F6', // Link blue
+    color: '#3B82F6',
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   button: {
     width: '100%',
-    backgroundColor: '#005CE6', // Bright Blue Button
+    backgroundColor: '#005CE6',
     height: 54,
     borderRadius: 10,
     alignItems: 'center',

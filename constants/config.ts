@@ -4,9 +4,8 @@ export const Config = {
   // Use your local IP address for React Native development
   // Replace with your actual backend URL
   // API_BASE_URL: 'https://l7wxtc2n-3000.inc1.devtunnels.ms', // Change this to your machine's IP for local development
-  // API_BASE_URL: 'https://api.bizzap.app', // Change this to your machine's IP for local development
-  API_BASE_URL: 'http://localhost:3000', // Change this to your machine's IP for local development
-  // API_BASE_URL: 'https://api.bizzap.app/ai', // Change this to your machine's IP for production
+  API_BASE_URL: 'https://api.bizzap.app', // Change this to your machine's IP for local development
+  // API_BASE_URL: 'http://localhost:3000', // Change this to your machine's IP for local development
   
   // Timeout in milliseconds
   API_TIMEOUT_MS: 30000,

@@ -186,8 +186,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#007AFF",
-          "sounds": ["./assets/sounds/notification.wav"]
+          "color": "#007AFF"
         }
       ],
       [
@@ -233,9 +232,9 @@
         "origin": "https://bizzap.app"
       },
       "eas": {
-        "projectId": "a30538b5-8f58-4081-8b22-7fa3fcdb3fa8"
+        "projectId": "926c2cb4-a532-4ac8-ac3b-d5e3b893978d"
       }
     },
-    "owner": "bizzap"
+    "owner": "ssakthitselvan"
   }
 }

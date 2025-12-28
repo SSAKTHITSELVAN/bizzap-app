@@ -1,644 +1,363 @@
-// app/(app)/search/[companyId].tsx
+// app/(app)/chat/partner-profile/[companyId].tsx
 
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-  Dimensions,
-  Alert,
-  FlatList,
+    View,
+    Text,
+    ScrollView,
+    TouchableOpacity,
+    StyleSheet,
+    Dimensions,
+    Image,
+    StatusBar,
+    Share,
+    ActivityIndicator
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { companyAPI, followersAPI } from '../../../services/user';
-import type { CompanyProfile, Product } from '../../../services/user';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { companyAPI } from '../../../services/user';
 
 // --- Responsive Sizing Utility ---
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STANDARD_WIDTH = 390;
-const sizeScale = (size: number) => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
+const sizeScale = (size: number): number => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
 
-// --- Product Card Component ---
-const ProductCard = ({ 
-  product, 
-  onPress 
-}: { 
-  product: Product; 
-  onPress: () => void;
-}) => {
-  const primaryImage = product.images && product.images.length > 0 
-    ? product.images[0] 
-    : 'https://via.placeholder.com/300x300/0D0D0D/ffffff?text=Product';
+// --- Assets & Constants ---
+const PLACEHOLDER_AVATAR = 'https://via.placeholder.com/150/1a1a1a/666?text=User';
+const PLACEHOLDER_COVER = 'https://via.placeholder.com/390x150/0F1115/333333?text=Cover';
 
-  return (
-    <TouchableOpacity 
-      style={styles.productCard} 
-      activeOpacity={0.7}
-      onPress={onPress}
-    >
-      <Image
-        source={{ uri: primaryImage }}
-        style={styles.productImage}
-        resizeMode="cover"
-      />
-      {product.images && product.images.length > 1 && (
-        <View style={styles.multipleImagesIndicator}>
-          <Ionicons name="layers" size={sizeScale(12)} color="#fff" />
-          <Text style={styles.imageCount}>{product.images.length}</Text>
-        </View>
-      )}
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={2}>
-          {product.name}
-        </Text>
-        <Text style={styles.productDescription} numberOfLines={2}>
-          {product.description}
-        </Text>
-        <View style={styles.productFooter}>
-          <Text style={styles.productPrice}>₹{product.price}</Text>
-          <Text style={styles.productMinQty}>
-            Min: {product.minimumQuantity}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+// Define Colors
+const COLORS = {
+    bg: '#000000',
+    cardBg: '#0F1115',
+    iconColor: '#8FA8CC',
+    textWhite: '#FFFFFF',
+    textBlue: '#589AFD',
+    cardBorder: 'rgba(120, 120, 120, 0.2)',
+    glassBg: 'rgba(255, 255, 255, 0.04)',
 };
 
-// --- Main Company Profile Component ---
-export default function CompanyProfileScreen() {
-  const router = useRouter();
-  const { companyId } = useLocalSearchParams<{ companyId: string }>();
-  
-  const [company, setCompany] = useState<CompanyProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
-  const [checkingFollowStatus, setCheckingFollowStatus] = useState(true);
+export default function PartnerProfileScreen() {
+    const router = useRouter();
+    const { companyId } = useLocalSearchParams<{ companyId: string }>();
+    const [loading, setLoading] = useState(true);
+    const [profileData, setProfileData] = useState<any>(null);
 
-  useEffect(() => {
-    if (companyId) {
-      loadCompanyProfile();
-      checkFollowStatus();
-    }
-  }, [companyId]);
-
-  const loadCompanyProfile = async () => {
-    try {
-      setLoading(true);
-      const profile = await companyAPI.getCompanyById(companyId);
-      setCompany(profile);
-    } catch (error: any) {
-      console.error('Failed to load company profile:', error);
-      Alert.alert('Error', error.message || 'Failed to load company profile');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkFollowStatus = async () => {
-    try {
-      setCheckingFollowStatus(true);
-      const status = await followersAPI.checkFollowStatus(companyId);
-      setIsFollowing(status.isFollowing);
-    } catch (error) {
-      console.error('Failed to check follow status:', error);
-    } finally {
-      setCheckingFollowStatus(false);
-    }
-  };
-
-  const handleFollowToggle = async () => {
-    if (followLoading) return;
-
-    try {
-      setFollowLoading(true);
-      
-      if (isFollowing) {
-        await followersAPI.unfollowCompany(companyId);
-        setIsFollowing(false);
-        if (company) {
-          setCompany({
-            ...company,
-            followersCount: Math.max((company.followersCount || 0) - 1, 0)
-          });
+    useEffect(() => {
+        if (companyId) {
+            loadPartnerData();
         }
-      } else {
-        await followersAPI.followCompany(companyId);
-        setIsFollowing(true);
-        if (company) {
-          setCompany({
-            ...company,
-            followersCount: (company.followersCount || 0) + 1
-          });
+    }, [companyId]);
+
+    const loadPartnerData = async () => {
+        try {
+            setLoading(true);
+            const data = await companyAPI.getCompanyById(companyId);
+            setProfileData(data);
+        } catch (error) {
+            console.error('Partner profile load error:', error);
+        } finally {
+            setLoading(false);
         }
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update follow status');
-    } finally {
-      setFollowLoading(false);
+    };
+
+    const handleBack = () => router.back();
+    
+    const handleShare = async () => {
+        try {
+            await Share.share({
+                message: `Check out ${profileData?.companyName || 'this profile'} on Bizzap!`,
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    // --- Image Logic ---
+    const avatarImage = profileData?.logo || profileData?.userPhoto || PLACEHOLDER_AVATAR;
+    const coverImage = profileData?.coverImage || PLACEHOLDER_COVER;
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0057D9" />
+            </View>
+        );
     }
-  };
 
-  const handleProductPress = (productId: string) => {
-    router.push(`/products/${productId}`);
-  };
-
-  if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={sizeScale(24)} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0095f6" />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      </View>
-    );
-  }
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-  if (!company) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={sizeScale(24)} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={sizeScale(64)} color="#666" />
-          <Text style={styles.errorText}>Company not found</Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      {/* Header with Back Button */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={sizeScale(24)} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {company.companyName}
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView 
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Cover Image */}
-        {company.coverImage && (
-          <Image
-            source={{ uri: company.coverImage }}
-            style={styles.coverImage}
-            resizeMode="cover"
-          />
-        )}
-
-        {/* Company Info Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.profileHeader}>
-            <Image
-              source={{ 
-                uri: company.logo || 'https://via.placeholder.com/80/0D0D0D/ffffff?text=C' 
-              }}
-              style={styles.companyLogo}
-            />
-            <View style={styles.profileActions}>
-              <TouchableOpacity
-                style={[
-                  styles.followButton,
-                  isFollowing && styles.followingButton,
-                  (followLoading || checkingFollowStatus) && styles.followButtonDisabled
-                ]}
-                onPress={handleFollowToggle}
-                disabled={followLoading || checkingFollowStatus}
-              >
-                {followLoading || checkingFollowStatus ? (
-                  <ActivityIndicator 
-                    size="small" 
-                    color={isFollowing ? "#0095f6" : "#fff"} 
-                  />
-                ) : (
-                  <>
-                    <Ionicons 
-                      name={isFollowing ? "checkmark" : "add"} 
-                      size={sizeScale(18)} 
-                      color={isFollowing ? "#fff" : "#fff"} 
+            <ScrollView 
+                style={styles.scrollView} 
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+            >
+                {/* --- 1. Top Section (Cover + Back Button) --- */}
+                <View style={styles.coverSection}>
+                    <Image 
+                        source={{ uri: coverImage }} 
+                        style={styles.coverImage} 
+                        resizeMode="cover" 
                     />
-                    <Text style={[
-                      styles.followButtonText,
-                      isFollowing && styles.followingButtonText
-                    ]}>
-                      {isFollowing ? 'Following' : 'Follow'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.messageButton}>
-                <Ionicons name="mail-outline" size={sizeScale(20)} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </View>
+                    
+                    {/* Back Button */}
+                    <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
+                        <Feather name="chevron-left" size={sizeScale(28)} color="#fff" />
+                    </TouchableOpacity>
+                </View>
 
-          {/* Company Details */}
-          <View style={styles.companyDetails}>
-            <Text style={styles.companyName}>{company.companyName}</Text>
-            {company.category && (
-              <Text style={styles.companyCategory}>{company.category}</Text>
-            )}
-            {company.about && (
-              <Text style={styles.companyAbout}>{company.about}</Text>
-            )}
-            {company.description && !company.about && (
-              <Text style={styles.companyAbout}>{company.description}</Text>
-            )}
-            
-            {/* Location */}
-            {(company.address || company.operationalAddress) && (
-              <View style={styles.locationContainer}>
-                <Ionicons name="location-outline" size={sizeScale(16)} color="#666" />
-                <Text style={styles.locationText}>
-                  {company.operationalAddress || company.address}
-                </Text>
-              </View>
-            )}
+                {/* --- 2. Main Depth Frame (Profile Card) --- */}
+                <View style={styles.depthFrame}>
+                    <View style={styles.cardBackground}>
+                        
+                        {/* Share Icon Only (No Edit) */}
+                        <TouchableOpacity style={styles.iconShare} onPress={handleShare}>
+                            <Ionicons name="share-social-outline" size={sizeScale(22)} color="#fff" />
+                        </TouchableOpacity>
 
-            {/* Stats */}
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{company.followersCount || 0}</Text>
-                <Text style={styles.statLabel}>Followers</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {company.following?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Following</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {company.leads?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Leads</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {company.products?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Products</Text>
-              </View>
-            </View>
-          </View>
+                        {/* Avatar */}
+                        <View style={styles.avatarContainer}>
+                            <Image 
+                                source={{ uri: avatarImage }} 
+                                style={styles.avatar} 
+                                resizeMode="cover"
+                            />
+                        </View>
+
+                        {/* Spacer where "Change Profile" used to be */}
+                        <View style={{ height: sizeScale(16) }} />
+
+                        {/* Info Glass Box */}
+                        <View style={styles.glassInfoBox}>
+                            <View style={styles.infoColumn}>
+                                <Text style={styles.label}>Company Name</Text>
+                                <Text style={styles.valueLarge} numberOfLines={1}>
+                                    {profileData?.companyName || 'Unknown Company'}
+                                </Text>
+                            </View>
+
+                            <View style={styles.verticalLine} />
+
+                            <View style={styles.infoColumn}>
+                                <Text style={styles.label}>Phone</Text>
+                                <Text style={styles.valueLarge} numberOfLines={1}>
+                                    {profileData?.phoneNumber || 'N/A'}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {/* --- 3. Details Section --- */}
+                <View style={styles.detailsContainer}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Company Details</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                        <View style={styles.detailLabelCol}>
+                            <Text style={styles.detailLabel}>GST Number</Text>
+                        </View>
+                        <View style={styles.detailValueCol}>
+                            <Text style={styles.detailValue}>{profileData?.gstNumber || 'Not Provided'}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                        <View style={styles.detailLabelCol}>
+                            <Text style={styles.detailLabel}>Category</Text>
+                        </View>
+                        <View style={styles.detailValueCol}>
+                            <Text style={styles.detailValue}>{profileData?.category || 'General'}</Text>
+                        </View>
+                    </View>
+
+                    {profileData?.description && (
+                        <View style={styles.detailRow}>
+                            <View style={styles.detailLabelCol}>
+                                <Text style={styles.detailLabel}>About</Text>
+                            </View>
+                            <View style={styles.detailValueCol}>
+                                <Text style={styles.detailValue}>{profileData.description}</Text>
+                            </View>
+                        </View>
+                    )}
+
+                    <View style={[styles.detailRow, { borderTopWidth: 1, borderTopColor: COLORS.cardBorder }]}>
+                        <View style={styles.detailLabelCol}>
+                            <Text style={styles.detailLabel}>Address</Text>
+                        </View>
+                        <View style={styles.detailValueCol}>
+                            <Text style={styles.detailValue} numberOfLines={3}>
+                                {profileData?.address || 'No address provided'}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Spacer */}
+                <View style={{ height: sizeScale(40) }} />
+            </ScrollView>
         </View>
-
-        {/* Products Catalog */}
-        <View style={styles.catalogSection}>
-          <View style={styles.catalogHeader}>
-            <Text style={styles.catalogTitle}>Product Catalog</Text>
-            <Text style={styles.catalogCount}>
-              {company.products?.length || 0} Products
-            </Text>
-          </View>
-
-          {company.products && company.products.length > 0 ? (
-            <View style={styles.productsGrid}>
-              {company.products.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onPress={() => handleProductPress(product.id)}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyProducts}>
-              <Ionicons name="cube-outline" size={sizeScale(48)} color="#333" />
-              <Text style={styles.emptyProductsText}>
-                No products available
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Bottom Spacing */}
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-    </View>
-  );
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: sizeScale(16),
-    paddingTop: sizeScale(60),
-    paddingBottom: sizeScale(12),
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#2a2a2a',
-  },
-  backButton: {
-    padding: sizeScale(4),
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: sizeScale(16),
-    fontWeight: '600',
-    color: '#fff',
-    textAlign: 'center',
-    marginHorizontal: sizeScale(16),
-  },
-  headerRight: {
-    width: sizeScale(32),
-  },
-
-  // Loading & Error
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: sizeScale(12),
-    fontSize: sizeScale(14),
-    color: '#666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    marginTop: sizeScale(16),
-    fontSize: sizeScale(16),
-    color: '#666',
-  },
-
-  // Content
-  content: {
-    flex: 1,
-  },
-
-  // Cover Image
-  coverImage: {
-    width: '100%',
-    height: sizeScale(200),
-    backgroundColor: '#1a1a1a',
-  },
-
-  // Profile Section
-  profileSection: {
-    paddingHorizontal: sizeScale(16),
-    paddingTop: sizeScale(16),
-    paddingBottom: sizeScale(24),
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#2a2a2a',
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: sizeScale(16),
-  },
-  companyLogo: {
-    width: sizeScale(80),
-    height: sizeScale(80),
-    borderRadius: sizeScale(40),
-    backgroundColor: '#1a1a1a',
-    borderWidth: 3,
-    borderColor: '#000',
-  },
-  profileActions: {
-    flexDirection: 'row',
-    gap: sizeScale(8),
-  },
-  followButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: sizeScale(6),
-    paddingHorizontal: sizeScale(20),
-    paddingVertical: sizeScale(8),
-    backgroundColor: '#0095f6',
-    borderRadius: sizeScale(8),
-  },
-  followingButton: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  followButtonDisabled: {
-    opacity: 0.6,
-  },
-  followButtonText: {
-    fontSize: sizeScale(14),
-    fontWeight: '600',
-    color: '#fff',
-  },
-  followingButtonText: {
-    color: '#fff',
-  },
-  messageButton: {
-    padding: sizeScale(10),
-    backgroundColor: '#1a1a1a',
-    borderRadius: sizeScale(8),
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-
-  // Company Details
-  companyDetails: {
-    gap: sizeScale(8),
-  },
-  companyName: {
-    fontSize: sizeScale(20),
-    fontWeight: '700',
-    color: '#fff',
-  },
-  companyCategory: {
-    fontSize: sizeScale(14),
-    color: '#0095f6',
-    fontWeight: '600',
-  },
-  companyAbout: {
-    fontSize: sizeScale(14),
-    color: '#ccc',
-    lineHeight: sizeScale(20),
-    marginTop: sizeScale(4),
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: sizeScale(6),
-    marginTop: sizeScale(4),
-  },
-  locationText: {
-    fontSize: sizeScale(14),
-    color: '#666',
-    flex: 1,
-  },
-
-  // Stats
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: sizeScale(16),
-    paddingTop: sizeScale(16),
-    borderTopWidth: 0.5,
-    borderTopColor: '#2a2a2a',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: sizeScale(18),
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: sizeScale(4),
-  },
-  statLabel: {
-    fontSize: sizeScale(12),
-    color: '#666',
-  },
-  statDivider: {
-    width: 1,
-    height: sizeScale(30),
-    backgroundColor: '#2a2a2a',
-  },
-
-  // Catalog Section
-  catalogSection: {
-    paddingTop: sizeScale(24),
-  },
-  catalogHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: sizeScale(16),
-    marginBottom: sizeScale(16),
-  },
-  catalogTitle: {
-    fontSize: sizeScale(18),
-    fontWeight: '700',
-    color: '#fff',
-  },
-  catalogCount: {
-    fontSize: sizeScale(14),
-    color: '#666',
-  },
-
-  // Products Grid
-  productsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: sizeScale(8),
-  },
-  productCard: {
-    width: (SCREEN_WIDTH - sizeScale(24)) / 2,
-    marginHorizontal: sizeScale(4),
-    marginBottom: sizeScale(16),
-    backgroundColor: '#1a1a1a',
-    borderRadius: sizeScale(12),
-    overflow: 'hidden',
-  },
-  productImage: {
-    width: '100%',
-    height: sizeScale(180),
-    backgroundColor: '#0d0d0d',
-  },
-  multipleImagesIndicator: {
-    position: 'absolute',
-    top: sizeScale(8),
-    right: sizeScale(8),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: sizeScale(4),
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: sizeScale(8),
-    paddingVertical: sizeScale(4),
-    borderRadius: sizeScale(12),
-  },
-  imageCount: {
-    fontSize: sizeScale(12),
-    fontWeight: '600',
-    color: '#fff',
-  },
-  productInfo: {
-    padding: sizeScale(12),
-  },
-  productName: {
-    fontSize: sizeScale(14),
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: sizeScale(4),
-    lineHeight: sizeScale(18),
-  },
-  productDescription: {
-    fontSize: sizeScale(12),
-    color: '#666',
-    lineHeight: sizeScale(16),
-    marginBottom: sizeScale(8),
-  },
-  productFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  productPrice: {
-    fontSize: sizeScale(16),
-    fontWeight: '700',
-    color: '#0095f6',
-  },
-  productMinQty: {
-    fontSize: sizeScale(11),
-    color: '#666',
-  },
-
-  // Empty Products
-  emptyProducts: {
-    alignItems: 'center',
-    paddingVertical: sizeScale(60),
-  },
-  emptyProductsText: {
-    fontSize: sizeScale(14),
-    color: '#666',
-    marginTop: sizeScale(12),
-  },
-
-  // Bottom Spacing
-  bottomSpacing: {
-    height: sizeScale(40),
-  },
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.bg,
+    },
+    loadingContainer: {
+        flex: 1,
+        backgroundColor: COLORS.bg,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingBottom: sizeScale(40),
+    },
+    // --- Cover Section ---
+    coverSection: {
+        height: sizeScale(150),
+        width: '100%',
+        position: 'relative',
+        zIndex: 0,
+    },
+    coverImage: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#1a1a1a',
+    },
+    backButton: {
+        position: 'absolute',
+        top: sizeScale(50),
+        left: sizeScale(16),
+        width: sizeScale(40),
+        height: sizeScale(40),
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.3)', 
+        borderRadius: sizeScale(20),
+        zIndex: 20,
+    },
+    // --- Depth Frame ---
+    depthFrame: {
+        marginTop: sizeScale(-75),
+        paddingHorizontal: sizeScale(16),
+        width: '100%',
+        zIndex: 1,
+        position: 'relative',
+    },
+    cardBackground: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: sizeScale(8),
+        paddingTop: sizeScale(18),
+        paddingBottom: sizeScale(16),
+        alignItems: 'center',
+        position: 'relative',
+        borderWidth: 1,
+        borderColor: '#1F2937',
+    },
+    iconShare: {
+        position: 'absolute',
+        top: sizeScale(16),
+        right: sizeScale(16),
+        zIndex: 10,
+    },
+    avatarContainer: {
+        width: sizeScale(100),
+        height: sizeScale(100),
+        borderRadius: sizeScale(50),
+        borderWidth: 4,
+        borderColor: '#000',
+        overflow: 'hidden',
+        marginBottom: sizeScale(8),
+        backgroundColor: '#1a1a1a', 
+    },
+    avatar: {
+        width: '100%',
+        height: '100%',
+        borderRadius: sizeScale(50),
+    },
+    // --- Glass Info Box ---
+    glassInfoBox: {
+        width: '92%',
+        backgroundColor: COLORS.glassBg,
+        borderRadius: sizeScale(10),
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        flexDirection: 'row',
+        padding: sizeScale(12),
+    },
+    infoColumn: {
+        flex: 1,
+        paddingHorizontal: sizeScale(4),
+        alignItems: 'center',
+    },
+    verticalLine: {
+        width: 1,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        height: '80%',
+        alignSelf: 'center',
+    },
+    label: {
+        color: COLORS.iconColor,
+        fontSize: sizeScale(12),
+        marginBottom: sizeScale(2),
+    },
+    valueLarge: {
+        color: COLORS.textWhite,
+        fontSize: sizeScale(16),
+        fontWeight: '600',
+    },
+    // --- Details ---
+    detailsContainer: {
+        marginTop: sizeScale(24),
+        marginHorizontal: sizeScale(16),
+        backgroundColor: '#000',
+        paddingVertical: sizeScale(8),
+    },
+    sectionHeader: {
+        marginBottom: sizeScale(16),
+        borderBottomWidth: 1,
+        borderBottomColor: '#1F2937',
+        paddingBottom: sizeScale(8),
+    },
+    sectionTitle: {
+        color: COLORS.textWhite,
+        fontSize: sizeScale(16),
+        fontWeight: '600',
+    },
+    detailRow: {
+        flexDirection: 'row',
+        borderTopWidth: 1,
+        borderTopColor: COLORS.cardBorder,
+        paddingVertical: sizeScale(14),
+        alignItems: 'flex-start',
+    },
+    detailLabelCol: {
+        width: sizeScale(100),
+    },
+    detailValueCol: {
+        flex: 1,
+        alignItems: 'flex-end',
+    },
+    detailLabel: {
+        color: COLORS.iconColor,
+        fontSize: sizeScale(14),
+        fontWeight: '400',
+    },
+    detailValue: {
+        color: COLORS.textWhite,
+        fontSize: sizeScale(14),
+        fontWeight: '400',
+        textAlign: 'right',
+        lineHeight: sizeScale(20),
+    },
 });

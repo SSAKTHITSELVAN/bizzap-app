@@ -2,8 +2,9 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { notificationService, NotificationData } from '../services/notificationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface NotificationContextType {
   notifications: NotificationData[];
@@ -30,15 +31,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
   const appState = useRef(AppState.currentState);
 
-  // Register for push notifications on mount
+  // Initialize notifications after ensuring auth token exists
   useEffect(() => {
-    registerForPushNotifications();
-    loadNotifications();
+    const initializeNotifications = async () => {
+      try {
+        // Wait a bit for AsyncStorage to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Check if auth token exists
+        const authToken = await AsyncStorage.getItem('auth_token');
+        
+        if (authToken) {
+          console.log('[NotificationProvider] Auth token found, initializing...');
+          await registerForPushNotifications();
+          await loadNotifications();
+          setIsInitialized(true);
+        } else {
+          console.log('[NotificationProvider] No auth token yet, will retry...');
+          // Retry after 2 seconds
+          setTimeout(initializeNotifications, 2000);
+        }
+      } catch (error) {
+        console.error('[NotificationProvider] Initialization error:', error);
+        // Retry on error
+        setTimeout(initializeNotifications, 2000);
+      }
+    };
+
+    initializeNotifications();
 
     // Listen for foreground notifications
     notificationListener.current = Notifications.addNotificationReceivedListener(
@@ -64,10 +90,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const token = await notificationService.registerForPushNotifications();
       if (token) {
+        console.log('[NotificationProvider] Registering token with backend...');
         await notificationService.registerTokenWithBackend(token);
+        console.log('[NotificationProvider] ✅ Token registered successfully');
       }
     } catch (error) {
-      console.error('Error registering for push notifications:', error);
+      console.error('[NotificationProvider] Error registering push notifications:', error);
     }
   };
 
@@ -80,15 +108,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       ]);
       setNotifications(notifs);
       setUnreadCount(count);
+      
+      if (Platform.OS === 'web') {
+        console.log(`[Web] Loaded ${notifs.length} notifications, ${count} unread`);
+      }
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('[NotificationProvider] Error loading notifications:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleNotificationReceived = async (notification: Notifications.Notification) => {
-    console.log('Notification received in foreground:', notification);
+    console.log('[NotificationProvider] Notification received in foreground:', notification.request.content.title);
     
     // Add to local notifications list immediately
     const newNotification: NotificationData = {
@@ -110,7 +142,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
-    console.log('Notification tapped:', response);
+    console.log('[NotificationProvider] Notification tapped:', response.notification.request.content.title);
     
     const data = response.notification.request.content.data;
     
@@ -122,27 +154,32 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } else if (data?.screen) {
       router.push(data.screen);
     } else {
-      router.push('/(app)/dashboard/notifications');
+      router.push('/(app)/notification');
     }
   };
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
       // App came to foreground, refresh notifications
-      console.log('App came to foreground, refreshing notifications');
-      await loadNotifications();
+      console.log('[NotificationProvider] App came to foreground, refreshing notifications');
+      if (isInitialized) {
+        await loadNotifications();
+      }
     }
     appState.current = nextAppState;
   };
 
   const refreshNotifications = async () => {
+    if (!isInitialized) {
+      console.log('[NotificationProvider] Not initialized yet, skipping refresh');
+      return;
+    }
     await loadNotifications();
   };
 
   const markAsRead = async (notificationIds: string[]) => {
     try {
-      await notificationService.markAsRead(notificationIds);
-      
+      // Optimistically update UI
       setNotifications(prev =>
         prev.map(notif =>
           notificationIds.includes(notif.id) ? { ...notif, isRead: true } : notif
@@ -150,52 +187,72 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       );
       
       setUnreadCount(prev => Math.max(0, prev - notificationIds.length));
+
+      // Then update backend
+      await notificationService.markAsRead(notificationIds);
     } catch (error) {
-      console.error('Error marking as read:', error);
+      console.error('[NotificationProvider] Error marking as read:', error);
+      // Revert on error
+      await loadNotifications();
     }
   };
 
   const markAllAsRead = async () => {
     try {
-      await notificationService.markAllAsRead();
-      
+      // Optimistically update UI
       setNotifications(prev =>
         prev.map(notif => ({ ...notif, isRead: true }))
       );
       
       setUnreadCount(0);
+
+      // Then update backend
+      await notificationService.markAllAsRead();
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      console.error('[NotificationProvider] Error marking all as read:', error);
+      // Revert on error
+      await loadNotifications();
     }
   };
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      await notificationService.deleteNotification(notificationId);
-      
       const deletedNotif = notifications.find(n => n.id === notificationId);
       
+      // Optimistically update UI
       setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
       
       if (deletedNotif && !deletedNotif.isRead) {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
+
+      // Then update backend
+      await notificationService.deleteNotification(notificationId);
     } catch (error) {
-      console.error('Error deleting notification:', error);
+      console.error('[NotificationProvider] Error deleting notification:', error);
+      // Revert on error
+      await loadNotifications();
       throw error;
     }
   };
 
   const deleteAllNotifications = async () => {
     try {
-      await notificationService.deleteAllNotifications();
+      // Optimistically update UI
       setNotifications([]);
       setUnreadCount(0);
+
+      // Then update backend
+      await notificationService.deleteAllNotifications();
       
-      // Also clear from notification center
-      await notificationService.clearAllDeliveredNotifications();
+      // Also clear from notification center (mobile only)
+      if (Platform.OS !== 'web') {
+        await notificationService.clearAllDeliveredNotifications();
+      }
     } catch (error) {
-      console.error('Error deleting all notifications:', error);
+      console.error('[NotificationProvider] Error deleting all notifications:', error);
+      // Revert on error
+      await loadNotifications();
       throw error;
     }
   };

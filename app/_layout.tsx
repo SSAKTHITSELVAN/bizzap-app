@@ -16,37 +16,30 @@ function RootLayoutNav() {
       const url = event.url;
       console.log('Deep link received:', url);
       
-      // Parse the URL
-      // Format: bizzap://dashboard?leadId={leadId} or https://bizzap.app/dashboard?leadId={leadId}
       const leadMatch = url.match(/[?&]leadId=([a-zA-Z0-9-]+)/);
       
       if (leadMatch && leadMatch[1]) {
         const leadId = leadMatch[1];
         
-        // Check if user is authenticated
         if (!isLoading) {
           if (isAuthenticated) {
-            // User is logged in - navigate to dashboard with leadId param
             router.push({
               pathname: '/(app)/dashboard',
               params: { leadId }
             });
           } else {
-            // User not logged in - navigate to auth flow
             router.push('/(auth)/phone-entry');
           }
         }
       }
     };
 
-    // Get initial URL (app opened via link)
     Linking.getInitialURL().then((url) => {
       if (url) {
         handleDeepLink({ url });
       }
     });
 
-    // Listen for incoming links (app already open)
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
@@ -86,9 +79,27 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <NotificationProvider>
+      <ConditionalNotificationProvider>
         <RootLayoutNav />
-      </NotificationProvider>
+      </ConditionalNotificationProvider>
     </AuthProvider>
   );
+}
+
+// Wrapper component that only renders NotificationProvider when authenticated
+function ConditionalNotificationProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Don't render NotificationProvider until auth check is complete
+  if (isLoading) {
+    return <>{children}</>;
+  }
+
+  // Only wrap with NotificationProvider if user is authenticated
+  if (isAuthenticated) {
+    return <NotificationProvider>{children}</NotificationProvider>;
+  }
+
+  // For unauthenticated users, render children without NotificationProvider
+  return <>{children}</>;
 }
