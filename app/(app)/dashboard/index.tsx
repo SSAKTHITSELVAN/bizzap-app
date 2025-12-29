@@ -1,3 +1,5 @@
+// app/(app)/dashboard/index.tsx
+
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, 
@@ -11,10 +13,11 @@ import {
   Modal,
   Share,
   Alert,
-  Linking
+  Linking,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AlertTriangle, Gift, X, Search } from 'lucide-react-native';
+import { AlertTriangle, Gift, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -32,6 +35,7 @@ export default function DashboardScreen() {
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotaData, setQuotaData] = useState<LeadQuotaData | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
@@ -43,9 +47,10 @@ export default function DashboardScreen() {
   const fetchData = async (isRefresh = false) => {
     try {
       if (!isRefresh) setIsLoading(true);
-      const [quotaResponse, availableLeadsResponse] = await Promise.all([
+      const [quotaResponse, availableLeadsResponse, profileResponse] = await Promise.all([
         companyAPI.getLeadQuota(),
         leadsAPI.getAvailableLeads(),
+        companyAPI.getProfile(),
       ]);
       
       if (quotaResponse.status === 'success') {
@@ -55,6 +60,9 @@ export default function DashboardScreen() {
       if (availableLeadsResponse.status === 'success') {
         setLeads(availableLeadsResponse.data.leads);
       }
+
+      setUserProfile(profileResponse);
+
     } catch (err) { 
       console.error(err); 
     } finally { 
@@ -67,220 +75,129 @@ export default function DashboardScreen() {
     fetchData(); 
   }, []);
 
-  // --- Deep Link Handler ---
+  // --- Deep Link & Params Logic ---
   useEffect(() => {
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
-      console.log('Deep link received in dashboard:', url);
-      
       const leadIdMatch = url.match(/[?&]leadId=([a-zA-Z0-9-]+)/);
       
       if (leadIdMatch && leadIdMatch[1]) {
         const leadId = leadIdMatch[1];
-        console.log('Extracted leadId:', leadId);
-        
         try {
           const response = await leadsAPI.getLeadById(leadId);
-          
           if (response.status === 'success') {
-            const sharedLead = response.data;
             const leadIndex = leads.findIndex(l => l.id === leadId);
-            
             if (leadIndex !== -1) {
               setHighlightedLeadId(leadId);
-              
-              setTimeout(() => {
-                flatListRef.current?.scrollToIndex({
-                  index: leadIndex,
-                  animated: true,
-                  viewPosition: 0.5
-                });
-              }, 500);
-              
-              setTimeout(() => {
-                setHighlightedLeadId(null);
-              }, 3500);
-              
-            } else {
-              Alert.alert(
-                'Lead Not Available',
-                `This lead "${sharedLead.title}" is no longer available in your feed. It may have been consumed or posted by you.`,
-                [{ text: 'OK' }]
-              );
+              setTimeout(() => flatListRef.current?.scrollToIndex({ index: leadIndex, animated: true, viewPosition: 0.5 }), 500);
+              setTimeout(() => setHighlightedLeadId(null), 3500);
             }
           }
-        } catch (error) {
-          console.error('Error fetching shared lead:', error);
-          Alert.alert(
-            'Error',
-            'Could not load the shared lead. It may no longer exist.',
-            [{ text: 'OK' }]
-          );
-        }
+        } catch (error) { console.error('Error fetching shared lead:', error); }
       }
     };
-
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleDeepLink({ url });
-      }
-    });
-
+    Linking.getInitialURL().then((url) => { if (url) handleDeepLink({ url }); });
     const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, [leads]);
 
-  useEffect(() => {
-    if (params.leadId && typeof params.leadId === 'string') {
-      const leadId = params.leadId;
-      console.log('LeadId from params:', leadId);
-      
-      const leadIndex = leads.findIndex(l => l.id === leadId);
-      
-      if (leadIndex !== -1) {
-        setHighlightedLeadId(leadId);
-        
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({
-            index: leadIndex,
-            animated: true,
-            viewPosition: 0.5
-          });
-        }, 500);
-        
-        setTimeout(() => {
-          setHighlightedLeadId(null);
-        }, 3500);
-      }
-    }
-  }, [params.leadId, leads]);
-
+  // --- Handlers ---
   const handleReferClick = async () => {
-    try {
-      const userDataString = await AsyncStorage.getItem('userData');
-      if (!userDataString) {
-        Alert.alert('Error', 'User data not found');
-        return;
-      }
-      
-      const userData = JSON.parse(userDataString);
-      const referralCode = userData.referralCode || quotaData?.referralCode;
-      
-      if (!referralCode) {
-        Alert.alert('Error', 'Referral code not found');
-        return;
-      }
-
-      setShowReferralModal(true);
-    } catch (error) {
-      console.error('Error getting referral code:', error);
-      Alert.alert('Error', 'Failed to get referral code');
-    }
-  };
-
-  const getReferralLink = async () => {
-    try {
-      const userDataString = await AsyncStorage.getItem('userData');
-      if (!userDataString) return '';
-      
-      const userData = JSON.parse(userDataString);
-      const referralCode = userData.referralCode || quotaData?.referralCode;
-      
-      return `https://bizzap.app/signup?ref=${referralCode}`;
-    } catch (error) {
-      return '';
-    }
+    setShowReferralModal(true);
   };
 
   const handleCopyLink = async () => {
-    const link = await getReferralLink();
-    if (link) {
+    if (quotaData?.referralCode) {
+      const link = `https://bizzap.app/signup?ref=${quotaData.referralCode}`;
       await Clipboard.setStringAsync(link);
       Alert.alert('Success', 'Referral link copied to clipboard!');
     }
   };
 
   const handleShareLink = async () => {
-    try {
-      const link = await getReferralLink();
-      const userDataString = await AsyncStorage.getItem('userData');
-      const userData = userDataString ? JSON.parse(userDataString) : null;
-      const referralCode = userData?.referralCode || quotaData?.referralCode;
-      
-      const message = `Join Bizzap and get 5 bonus leads! Use my referral code: ${referralCode}\n\nSign up here: ${link}`;
-      
-      await Share.share({
-        message,
-        title: 'Join Bizzap',
-      });
-    } catch (error) {
-      console.error('Error sharing:', error);
+    if (quotaData?.referralCode) {
+      const link = `https://bizzap.app/signup?ref=${quotaData.referralCode}`;
+      await Share.share({ message: `Join Bizzap and get bonus leads! Code: ${quotaData.referralCode}\n${link}` });
     }
   };
 
-  const handleSearchPress = () => {
-    router.push('/(app)/search');
-  };
+  // --- Render Components ---
 
   const renderHeader = () => {
-    if (!quotaData) return null;
+    // Header Data
+    const displayImage = userProfile?.userPhoto || userProfile?.logo;
+    const displayInitial = (userProfile?.userName || userProfile?.companyName || 'B').charAt(0).toUpperCase();
+
+    // Quota Data
+    if (!quotaData) return <View style={{ height: sizeScale(20) }} />; 
 
     const { remainingLeads, totalLeadQuota, daysUntilReset } = quotaData;
-    const isLowQuota = remainingLeads < 3;
+    const usedLeads = totalLeadQuota - remainingLeads;
+    const isLowQuota = remainingLeads < 5; 
 
     return (
-      <View style={styles.headerArea}>
-        {isLowQuota && (
-          <View style={styles.warningBanner}>
-            <AlertTriangle size={20} color="#F97316" />
-            <Text style={styles.warningText}>
-              Low on leads! Refer friends to earn 5 bonus leads each.
-            </Text>
-          </View>
-        )}
+      <View>
+        {/* Scrollable Nav Bar (Header) - Updated with Bottom Padding & Margin */}
+        <View style={styles.navRow}>
+            <Text style={styles.navTitle}>Leads</Text>
+            <TouchableOpacity 
+                style={styles.profileContainer}
+                onPress={() => router.push('/(app)/profile')}
+            >
+                {displayImage ? (
+                    <Image source={{ uri: displayImage }} style={styles.profileThumb} />
+                ) : (
+                    <View style={[styles.profileThumb, styles.profilePlaceholder]}>
+                        <Text style={styles.profileInitial}>{displayInitial}</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+        </View>
 
-        <View style={styles.quotaOuter}>
-          <View style={styles.quotaInner}>
+        {/* Quota Card Design */}
+        <View style={styles.headerArea}>
+          <View style={styles.quotaCard}>
+            
+            {/* Top Row: Usage & Expiry */}
             <View style={styles.quotaRow}>
               <Text style={styles.quotaText}>
-                {remainingLeads} leads available out of {totalLeadQuota} leads
+                <Text style={styles.greenText}>{usedLeads}/{totalLeadQuota} leads used</Text>
               </Text>
-              <Text style={styles.quotaBadge}>
-                {remainingLeads}/{totalLeadQuota} Free Leads
+              <Text style={styles.expiryText}>
+                Expire in: <Text style={styles.boldWhite}>{daysUntilReset} Days</Text>
               </Text>
             </View>
+
+            {/* Progress Bar */}
             <View style={styles.progressTrack}>
               <View 
                 style={[
                   styles.progressFill, 
-                  { 
-                    width: `${(remainingLeads / totalLeadQuota) * 100}%`,
-                    backgroundColor: isLowQuota ? '#F97316' : '#00D1B2'
-                  }
+                  { width: `${(usedLeads / totalLeadQuota) * 100}%` }
                 ]} 
               />
             </View>
-            <Text style={styles.expiryText}>
-              Expires in: <Text style={{ color: '#F97316' }}>{daysUntilReset} days</Text>
-            </Text>
-            <Text style={styles.needMore}>Need more leads?</Text>
-            <View style={styles.quotaActions}>
-              <TouchableOpacity 
-                style={styles.referBtn}
-                onPress={handleReferClick}
-              >
-                <Gift size={16} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.btnLabel}>1 Refer = 5 Leads</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
 
-        <View style={styles.leadsHeaderSection}>
-          <Text style={styles.leadsHeaderCount}>{leads.length} Leads</Text>
+            {/* Conditional Warning Box */}
+            {isLowQuota && (
+              <View style={styles.warningBox}>
+                <View style={styles.warningRow}>
+                  <AlertTriangle size={sizeScale(16)} color="#EA580C" /> 
+                  <Text style={styles.warningTitle}>You're almost running out of leads</Text>
+                </View>
+                <Text style={styles.warningSubtext}>Refer to get more leads.</Text>
+              </View>
+            )}
+
+            {/* Get More Leads Button */}
+            <TouchableOpacity 
+              style={styles.getMoreBtn}
+              onPress={handleReferClick}
+            >
+              <Text style={styles.getMoreText}>Get More Leads</Text>
+            </TouchableOpacity>
+
+          </View>
         </View>
       </View>
     );
@@ -295,7 +212,7 @@ export default function DashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <FlatList
         ref={flatListRef}
         data={leads}
@@ -303,105 +220,51 @@ export default function DashboardScreen() {
         ListHeaderComponent={renderHeader}
         renderItem={({ item }) => (
           <View 
-            ref={(ref) => {
-              if (ref) leadRefs.current.set(item.id, ref);
-            }}
-            style={[
-              highlightedLeadId === item.id && styles.highlightedCard
-            ]}
+            ref={(ref) => { if (ref) leadRefs.current.set(item.id, ref); }}
+            style={[highlightedLeadId === item.id && styles.highlightedCard]}
           >
-            <LeadCard 
-              lead={item} 
-              onConsumeSuccess={() => fetchData(true)} 
-            />
+            <LeadCard lead={item} onConsumeSuccess={() => fetchData(true)} />
           </View>
         )}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl 
             refreshing={isRefreshing} 
-            onRefresh={() => {
-              setIsRefreshing(true);
-              fetchData(true);
-            }}
+            onRefresh={() => { setIsRefreshing(true); fetchData(true); }}
             tintColor="#0057D9"
             colors={['#0057D9']}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Gift size={48} color="#00D1B2" />
-            </View>
+            <View style={styles.emptyIconCircle}><Gift size={48} color="#00D1B2" /></View>
             <Text style={styles.emptyTitle}>No Leads Available Right Now</Text>
-            <Text style={styles.emptyText}>
-              Share Bizzap with your friends to help them post leads! 
-              The more businesses join, the more opportunities for everyone.
-            </Text>
-            <TouchableOpacity 
-              style={styles.emptyReferBtn}
-              onPress={handleReferClick}
-            >
+            <Text style={styles.emptyText}>Share Bizzap with friends to help them post leads!</Text>
+            <TouchableOpacity style={styles.emptyReferBtn} onPress={handleReferClick}>
               <Gift size={18} color="#FFF" style={{ marginRight: 8 }} />
               <Text style={styles.emptyReferText}>Invite Friends Now</Text>
             </TouchableOpacity>
           </View>
         }
-        onScrollToIndexFailed={(info) => {
-          console.log('Scroll to index failed:', info);
-          setTimeout(() => {
-            flatListRef.current?.scrollToOffset({
-              offset: info.averageItemLength * info.index,
-              animated: true,
-            });
-          }, 100);
-        }}
       />
 
       {/* Referral Modal */}
-      <Modal
-        visible={showReferralModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowReferralModal(false)}
-      >
+      <Modal visible={showReferralModal} transparent animationType="slide" onRequestClose={() => setShowReferralModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.referralCard}>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={() => setShowReferralModal(false)}
-            >
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowReferralModal(false)}>
               <X size={24} color="#94A3B8" />
             </TouchableOpacity>
-
-            <View style={styles.giftIconCircle}>
-              <Gift size={40} color="#0057D9" />
-            </View>
-
+            <View style={styles.giftIconCircle}><Gift size={40} color="#0057D9" /></View>
             <Text style={styles.modalTitle}>Share & Earn Leads</Text>
-            <Text style={styles.modalDesc}>
-              Invite friends to join Bizzap. You both get <Text style={styles.highlightText}>5 bonus leads</Text> when they sign up!
-            </Text>
-
+            <Text style={styles.modalDesc}>Invite friends to join Bizzap. You get <Text style={styles.highlightText}>3 bonus leads</Text> when they sign up!</Text>
             <View style={styles.codeContainer}>
               <Text style={styles.codeLabel}>Your Referral Code</Text>
               <Text style={styles.codeValue}>{quotaData?.referralCode}</Text>
             </View>
-
             <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={styles.btnCopy}
-                onPress={handleCopyLink}
-              >
-                <Text style={styles.btnCopyText}>Copy Link</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.btnShare}
-                onPress={handleShareLink}
-              >
-                <Text style={styles.btnShareText}>Share</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnCopy} onPress={handleCopyLink}><Text style={styles.btnCopyText}>Copy Link</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.btnShare} onPress={handleShareLink}><Text style={styles.btnShareText}>Share</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -411,59 +274,137 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
+ container: { 
     flex: 1, 
-    backgroundColor: '#121924',
-    paddingTop: sizeScale(100),
+    backgroundColor: '#000000',
   },
-  headerArea: { 
-    paddingHorizontal: sizeScale(16), 
-    paddingTop: sizeScale(8),
-    backgroundColor: '#121924',
-  },
-  topHeader: {
+  // --- Header & Nav Styles ---
+  navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: sizeScale(12),
+    paddingHorizontal: sizeScale(16),
+    paddingTop: sizeScale(16),
+    paddingBottom: sizeScale(24), // Added Extra Bottom Padding for Header
+    marginBottom: sizeScale(16),  // Margin to separate Header from Card
+    backgroundColor: '#121924',
   },
-  dashboardTitle: {
+  navTitle: {
+    color: '#FFFFFF',
     fontSize: sizeScale(24),
     fontWeight: '700',
-    color: '#FFF',
     fontFamily: 'Outfit',
   },
-  searchIconButton: {
-    width: sizeScale(40),
-    height: sizeScale(40),
-    borderRadius: sizeScale(20),
-    backgroundColor: 'rgba(0, 87, 217, 0.1)',
+  profileContainer: {
+    borderRadius: sizeScale(16),
+    overflow: 'hidden',
+  },
+  profileThumb: {
+    width: sizeScale(32),
+    height: sizeScale(32),
+    borderRadius: sizeScale(16),
     justifyContent: 'center',
     alignItems: 'center',
   },
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+  profilePlaceholder: {
+    backgroundColor: '#8b5cf6',
+  },
+  profileInitial: {
+    fontSize: sizeScale(14),
+    fontWeight: '700',
+    color: '#fff',
+  },
+
+  // --- Quota Card Styles ---
+  headerArea: { 
+    paddingHorizontal: sizeScale(16), 
+    paddingBottom: sizeScale(16),
+  },
+  quotaCard: { 
+    width: '100%', 
+    borderRadius: sizeScale(12), 
+    padding: sizeScale(16), 
+    backgroundColor: '#111827', // Dark Card Background
     borderWidth: 1,
-    borderColor: '#F97316',
+    borderColor: '#1F2937',
+  },
+  quotaRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: sizeScale(12),
+  },
+  quotaText: { 
+    fontSize: sizeScale(16),
+    fontWeight: '500',
+  },
+  greenText: {
+    color: '#10B981', 
+    fontWeight: '700',
+  },
+  expiryText: { 
+    color: '#9CA3AF', 
+    fontSize: sizeScale(14), 
+  },
+  boldWhite: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  progressTrack: { 
+    height: sizeScale(6), 
+    backgroundColor: '#374151', 
+    borderRadius: sizeScale(3), 
+    marginBottom: sizeScale(16),
+    overflow: 'hidden',
+  },
+  progressFill: { 
+    height: '100%', 
+    borderRadius: sizeScale(3),
+    backgroundColor: '#00D1B2', 
+  },
+  
+  // Warning Box
+  warningBox: {
+    backgroundColor: 'rgba(69, 26, 3, 0.6)', // Dark brown/orange bg
+    borderWidth: 1,
+    borderColor: '#7C2D12',
     borderRadius: sizeScale(8),
     padding: sizeScale(12),
-    marginBottom: sizeScale(12),
-    gap: sizeScale(10),
+    marginBottom: sizeScale(16),
   },
-  warningText: {
-    flex: 1,
-    color: '#F97316',
-    fontSize: sizeScale(13),
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: sizeScale(4),
+    gap: sizeScale(8),
+  },
+  warningTitle: {
+    color: '#EA580C', // Orange text
+    fontSize: sizeScale(14),
     fontWeight: '600',
   },
-  centered: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    backgroundColor: '#121924',
+  warningSubtext: {
+    color: '#9CA3AF',
+    fontSize: sizeScale(13),
+    marginLeft: sizeScale(24), 
   },
+
+  // Get More Button
+  getMoreBtn: { 
+    width: '100%',
+    height: sizeScale(44), 
+    backgroundColor: '#EA580C', // Solid Orange
+    borderRadius: sizeScale(8), 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  getMoreText: { 
+    color: '#FFFFFF', 
+    fontSize: sizeScale(15), 
+    fontWeight: '600',
+  },
+
+  // --- List Styles ---
   listContent: { 
     paddingBottom: sizeScale(120),
   },
@@ -475,76 +416,14 @@ const styles = StyleSheet.create({
     marginHorizontal: -2,
     padding: 2,
   },
-  quotaOuter: { 
-    width: '100%', 
-    paddingVertical: sizeScale(12),
-  },
-  quotaInner: { 
-    width: '100%', 
-    borderRadius: sizeScale(8), 
-    padding: sizeScale(16), 
-    backgroundColor: 'rgba(0, 93, 212, 0.19)',
-  },
-  quotaRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: sizeScale(12),
-    flexWrap: 'wrap',
-    gap: sizeScale(8),
-  },
-  quotaText: { 
-    color: '#fff', 
-    fontSize: sizeScale(12),
-    flex: 1,
-    minWidth: sizeScale(150),
-  },
-  quotaBadge: { 
-    color: '#fff', 
-    fontSize: sizeScale(14), 
-    fontWeight: '700',
-  },
-  progressTrack: { 
-    height: sizeScale(4), 
-    backgroundColor: '#1E293B', 
-    borderRadius: sizeScale(2), 
-    marginBottom: sizeScale(12),
-  },
-  progressFill: { 
-    height: '100%', 
-    borderRadius: sizeScale(2),
-  },
-  expiryText: { 
-    color: '#8B949E', 
-    fontSize: sizeScale(12), 
-    marginBottom: sizeScale(8),
-  },
-  needMore: { 
-    color: '#fff', 
-    fontSize: sizeScale(14), 
-    fontWeight: '500', 
-    marginBottom: sizeScale(12),
-  },
-  quotaActions: { 
-    flexDirection: 'row', 
-    gap: sizeScale(12),
-    flexWrap: 'wrap',
-  },
-  referBtn: { 
+  centered: { 
     flex: 1, 
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: sizeScale(140),
-    height: sizeScale(36), 
-    backgroundColor: '#0057D9', 
-    borderRadius: sizeScale(4), 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: '#000000',
   },
-  btnLabel: { 
-    color: '#fff', 
-    fontSize: sizeScale(12), 
-    fontWeight: '600',
-  },
+  
+  // Empty State
   emptyContainer: {
     paddingVertical: sizeScale(60),
     paddingHorizontal: sizeScale(24),
@@ -588,16 +467,8 @@ const styles = StyleSheet.create({
     fontSize: sizeScale(14),
     fontWeight: '600',
   },
-  leadsHeaderSection: {
-    paddingVertical: sizeScale(16),
-    borderBottomWidth: 1,
-    borderBottomColor: '#30363D',
-  },
-  leadsHeaderCount: {
-    fontSize: sizeScale(14),
-    fontWeight: '600',
-    color: '#00D1B2',
-  },
+
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.8)',

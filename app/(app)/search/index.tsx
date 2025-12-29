@@ -208,13 +208,13 @@ export default function SearchScreen() {
       {/* Search Bar */}
       <View style={styles.searchBarContainer}>
         <LinearGradient
-          colors={['rgba(0, 149, 246, 0.4)', 'rgba(138, 43, 226, 0.4)', 'rgba(255, 0, 128, 0.4)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          colors={['#003E9C', '#01BE8B']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
           style={styles.gradientBorder}
         >
           <View style={styles.searchInputWrapper}>
-            <Ionicons name="search" size={sizeScale(22)} color="#0095f6" />
+            <Ionicons name="search" size={sizeScale(22)} color="#01BE8B" />
             <TextInput
               style={styles.searchInput}
               placeholder="Search accounts, leads.."
@@ -242,7 +242,7 @@ export default function SearchScreen() {
       {/* Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0095f6" />
+          <ActivityIndicator size="large" color="#01BE8B" />
           <Text style={styles.loadingText}>Searching...</Text>
         </View>
       ) : isSearching && searchResults ? (
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#fff',
+    borderBottomColor: '#01BE8B',
   },
   tabText: {
     fontSize: sizeScale(15),
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   activeTabText: {
-    color: '#fff',
+    color: '#01BE8B',
   },
 
   // Default Content
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   followButton: {
     paddingHorizontal: sizeScale(24),
     paddingVertical: sizeScale(6),
-    backgroundColor: '#0095f6',
+    backgroundColor: '#01BE8B',
     borderRadius: sizeScale(6),
     minWidth: sizeScale(90),
     alignItems: 'center',

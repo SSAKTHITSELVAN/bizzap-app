@@ -267,7 +267,7 @@
 
 // const styles = StyleSheet.create({
 //   cardOuter: {
-//     backgroundColor: '#0F1417',
+//     backgroundColor: '#121924',
 //     padding: 16,
 //     borderRadius: 12,
 //     marginBottom: 16,
@@ -275,14 +275,12 @@
 //   },
 //   titleSection: {
 //     width: '100%',
-//     borderRadius: 4,
-//     padding: 8,
-//     backgroundColor: 'rgba(0, 87, 217, 0.04)',
+//     borderRadius: 8,
+//     padding: 12,
+//     backgroundColor: 'rgba(255, 255, 255, 0.03)',
 //     marginBottom: 20,
-//     shadowColor: '#FFF',
-//     shadowOffset: { width: 0, height: 1 },
-//     shadowOpacity: 0.05,
-//     shadowRadius: 0,
+//     borderWidth: 1,
+//     borderColor: 'rgba(255, 255, 255, 0.15)',
 //   },
 //   mainTitle: {
 //     color: '#FFFFFF',
@@ -500,6 +498,7 @@
 // });
 
 
+
 // components/cards/lead-card.tsx
 import React, { useState } from 'react';
 import { 
@@ -516,10 +515,10 @@ import {
   Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient'; // Required for the Rainbow Border
-import { MapPin, Clock, Share2, X, MessageCircle } from 'lucide-react-native';
+import { MapPin, Clock, Bookmark, Share2, X, MessageCircle, AlertCircle } from 'lucide-react-native';
 import { Lead, leadsAPI } from '../../services/leads';
 import { chatAPI } from '../../services/chat-websocket';
+import Svg, { Defs, LinearGradient, Stop, Circle, Path } from 'react-native-svg';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -527,6 +526,85 @@ interface LeadCardProps {
   lead: Lead;
   onConsumeSuccess?: () => void;
 }
+
+// Gradient Icon Components
+const GradientMapPin = ({ size = 16 }: { size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Defs>
+      <LinearGradient id="mapPinGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <Stop offset="50%" stopColor="#003E9C" stopOpacity="1" />
+        <Stop offset="50%" stopColor="#01BE8B" stopOpacity="1" />
+      </LinearGradient>
+    </Defs>
+    <Path
+      d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+      stroke="url(#mapPinGradient)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Circle
+      cx="12"
+      cy="10"
+      r="3"
+      stroke="url(#mapPinGradient)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+const GradientClock = ({ size = 16 }: { size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Defs>
+      <LinearGradient id="clockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <Stop offset="50%" stopColor="#003E9C" stopOpacity="1" />
+        <Stop offset="50%" stopColor="#01BE8B" stopOpacity="1" />
+      </LinearGradient>``
+    </Defs>
+    <Circle
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="url(#clockGradient)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M12 6v6l4 2"
+      stroke="url(#clockGradient)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+// Time formatting helper
+const formatTimeAgo = (dateString: string): string => {
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffMs = now.getTime() - past.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  
+  // For older dates, show formatted date
+  const options: Intl.DateTimeFormatOptions = { 
+    month: 'short', 
+    day: 'numeric',
+    year: past.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  };
+  return past.toLocaleDateString('en-US', options);
+};
 
 export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
   const router = useRouter();
@@ -550,7 +628,7 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
     try {
       const leadLink = generateLeadLink();
       
-      const message = `👋 Check out this lead on Bizzap!\n\n` +
+      const message = `🔥 Check out this lead on Bizzap!\n\n` +
         `${lead.title}\n` +
         `📍 ${lead.location || 'Location not specified'}\n` +
         `💰 ${lead.budget ? `Budget: ${lead.budget}` : 'Budget: Negotiable'}\n\n` +
@@ -559,7 +637,7 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
       await Share.share({
         message,
         title: `Lead: ${lead.title}`,
-        url: leadLink, 
+        url: leadLink,
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -575,17 +653,14 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
     try {
       setIsConsuming(true);
 
-      // 1. Consume the lead
       const consumeResponse = await leadsAPI.consumeLead(lead.id);
 
       if (consumeResponse.status === 'success') {
         
-        // 2. Refresh dashboard quota
         if (onConsumeSuccess) {
           onConsumeSuccess();
         }
 
-        // 3. Auto-post first message
         const starterMessage = `Hello, I saw your lead "${lead.title}" in ${lead.location || 'your area'} and would like to discuss the requirements.`;
         
         try {
@@ -598,11 +673,9 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
             console.warn("Failed to send auto-message, navigating anyway", msgError);
         }
 
-        // 4. Close Modal
         setShowConsumeModal(false);
         setIsConsuming(false);
 
-        // 5. Navigate to Chat
         router.push({
             pathname: '/(app)/chat/[companyId]',
             params: { companyId: lead.companyId }
@@ -618,106 +691,80 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
 
   return (
     <>
-      {/* RAINBOW GLASS BORDER:
-         The LinearGradient creates the colorful background.
-         The padding creates the "border width".
-      */}
-      <LinearGradient
-        // Vibrant Rainbow Colors (Red -> Orange -> Yellow -> Green -> Cyan -> Blue -> Purple)
-        colors={[
-            '#FF0000', 
-            '#FF7F00', 
-            '#FFFF00', 
-            '#00FF00', 
-            '#00FFFF', 
-            '#0000FF', 
-            '#8B00FF'
-        ]} 
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.rainbowBorderContainer, { width: cardWidth }]}
-      >
-        {/* Inner Content with Original Background to mask the center of the rainbow */}
-        <View style={styles.cardInnerContent}>
+      <View style={[styles.cardOuter, { width: cardWidth }]}>
+        {/* Title Section */}
+        <TouchableOpacity 
+          style={styles.titleSection} 
+          onPress={() => setExpanded(!expanded)} 
+          activeOpacity={0.8}
+        >
+          <Text style={styles.mainTitle} numberOfLines={expanded ? undefined : 2}>
+            {lead.title}
+          </Text>
+          <View style={styles.metaRow}>
+            <View style={styles.metaGroup}>
+              <GradientMapPin size={16} />
+              <Text style={styles.metaLabel} numberOfLines={1}>
+                {lead.location || 'Location not specified'}
+              </Text>
+            </View>
+            <View style={styles.metaGroup}>
+              <GradientClock size={16} />
+              <Text style={styles.metaLabel} numberOfLines={1}>
+                {formatTimeAgo(lead.createdAt)}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* Details Body */}
+        <View style={styles.detailBody}>
+          <TouchableOpacity onPress={() => setImageZoomed(true)} activeOpacity={0.8}>
+            <Image 
+                source={{ uri: lead.imageUrl || 'https://via.placeholder.com/72' }} 
+                style={styles.leadThumb} 
+            />
+          </TouchableOpacity>
           
-          {/* Title Section (Exact Original) */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statCol}>
+              <Text style={styles.sLabel} numberOfLines={1}>Quantity</Text>
+              <Text style={styles.sValue} numberOfLines={1}>
+                {lead.quantity || 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.statCol}>
+              <Text style={styles.sLabel} numberOfLines={1}>Budget</Text>
+              <Text style={styles.sValue} numberOfLines={1}>
+                {lead.budget ? `₹${lead.budget}` : 'Negotiable'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Footer Bar */}
+        <View style={styles.footerBar}>
+          <View style={styles.utilIcons}>
+            <TouchableOpacity 
+              onPress={handleShare}
+              style={styles.iconButton}
+            >
+              <Share2 size={24} color="#FFF" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+          
           <TouchableOpacity 
-            style={styles.titleSection} 
-            onPress={() => setExpanded(!expanded)} 
+            style={styles.chatAction}
+            onPress={handleChatPress}
             activeOpacity={0.8}
           >
-            <Text style={styles.mainTitle} numberOfLines={expanded ? undefined : 2}>
-              {lead.title}
-            </Text>
-            <View style={styles.metaRow}>
-              <View style={styles.metaGroup}>
-                <MapPin size={16} color="#8FA8CC" />
-                <Text style={styles.metaLabel} numberOfLines={1}>{lead.location}</Text>
-              </View>
-              <View style={styles.metaGroup}>
-                <Clock size={16} color="#8FA8CC" />
-                <Text style={styles.metaLabel} numberOfLines={1}>10:30 AM Today</Text>
-              </View>
-            </View>
+            <Text style={styles.chatText}>Chat with Buyer</Text>
           </TouchableOpacity>
-
-          {/* Details Body (Exact Original) */}
-          <View style={styles.detailBody}>
-            <TouchableOpacity onPress={() => setImageZoomed(true)} activeOpacity={0.8}>
-              <Image 
-                  source={{ uri: lead.imageUrl || 'https://via.placeholder.com/72' }} 
-                  style={styles.leadThumb} 
-              />
-            </TouchableOpacity>
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statCol}>
-                <Text style={styles.sLabel} numberOfLines={1}>Quantity</Text>
-                <Text style={styles.sValue} numberOfLines={1}>
-                  {lead.quantity || 'N/A'}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.statCol}>
-                <Text style={styles.sLabel} numberOfLines={1}>Budget</Text>
-                <Text style={styles.sValue} numberOfLines={1}>
-                  {lead.budget ? `₹${lead.budget}` : 'Negotiable'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Expanded Description (Exact Original) */}
-          {expanded && lead.description && (
-            <View style={styles.descriptionContainer}>
-              <Text style={styles.descriptionText}>{lead.description}</Text>
-            </View>
-          )}
-
-          {/* Footer Bar (Exact Original) */}
-          <View style={styles.footerBar}>
-            <View style={styles.utilIcons}>
-              <TouchableOpacity 
-                onPress={handleShare}
-                style={styles.iconButton}
-              >
-                <Share2 size={24} color="#FFF" strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.chatAction}
-              onPress={handleChatPress}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.chatText}>Talk to Buyer</Text>
-            </TouchableOpacity>
-          </View>
-
         </View>
-      </LinearGradient>
+      </View>
 
-      {/* Image Zoom Modal (Unchanged) */}
+      {/* Image Zoom Modal */}
       <Modal
         visible={imageZoomed}
         transparent={true}
@@ -742,7 +789,7 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
         </View>
       </Modal>
 
-      {/* Consume Confirmation Modal (Unchanged) */}
+      {/* Consume Confirmation Modal */}
       <Modal
         visible={showConsumeModal}
         transparent={true}
@@ -790,36 +837,21 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
 };
 
 const styles = StyleSheet.create({
-  // --- New Rainbow Border Styles ---
-  rainbowBorderContainer: {
-    padding: 1.5, // The thickness of the rainbow border
+  cardOuter: {
+    backgroundColor: '#121924',
+    padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     alignSelf: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
   },
-  cardInnerContent: {
-    backgroundColor: '#0F1417', // Exact Original Background
-    borderRadius: 10.5, // Slightly less than container to fit perfectly (12 - 1.5)
-    padding: 16, // Original Padding
-    width: '100%',
-  },
-
-  // --- Original Styles Below (Unchanged) ---
   titleSection: {
     width: '100%',
-    borderRadius: 4,
-    padding: 8,
-    backgroundColor: 'rgba(0, 87, 217, 0.04)',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     marginBottom: 20,
-    shadowColor: '#FFF',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   mainTitle: {
     color: '#FFFFFF',
@@ -888,16 +920,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
-  },
-  descriptionContainer: {
-    marginBottom: 20,
-    paddingHorizontal: 4,
-  },
-  descriptionText: {
-    color: '#D1D5DB',
-    fontSize: 13,
-    lineHeight: 20,
-    fontFamily: 'Outfit',
   },
   footerBar: {
     height: 40,

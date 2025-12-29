@@ -23,7 +23,7 @@ function CustomHeader() {
     } | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Hide header on notifications page
+    // Hide header on notifications page AND dashboard index (Index now handles its own header for scrolling)
     const isNotificationsPage = pathname?.includes('/notifications');
     const isDashboardIndex = pathname === '/(app)/dashboard' || pathname === '/dashboard';
     
@@ -47,51 +47,15 @@ function CustomHeader() {
         }
     };
 
-    // Don't render header on notifications page
-    if (isNotificationsPage) {
+    // Don't render header on notifications page or Dashboard Index (it scrolls there now)
+    if (isNotificationsPage || isDashboardIndex) {
         return null;
     }
 
-    // Determine which image to display (prioritize userPhoto, fallback to logo)
+    // Default header for other pages (like Search, etc if they share this layout)
     const displayImage = userProfile?.userPhoto || userProfile?.logo;
     const displayInitial = (userProfile?.userName || userProfile?.companyName || 'B').charAt(0).toUpperCase();
 
-    // Show different header for dashboard index page
-    if (isDashboardIndex) {
-        return (
-            <View style={styles.dashboardHeaderWrapper}>
-                <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
-                    <View style={styles.dashboardHeaderContent}>
-                        {/* Title and Profile Row */}
-                        <View style={styles.navRow}>
-                            <Text style={styles.navTitle}>Leads</Text>
-                            <TouchableOpacity 
-                                style={styles.profileContainer}
-                                onPress={() => router.push('/(app)/profile')}
-                            >
-                                {loading ? (
-                                    <View style={styles.profileThumb}>
-                                        <ActivityIndicator size="small" color="#fff" />
-                                    </View>
-                                ) : displayImage ? (
-                                    <Image 
-                                        source={{ uri: displayImage }} 
-                                        style={styles.profileThumb} 
-                                    />
-                                ) : (
-                                    <View style={[styles.profileThumb, styles.profilePlaceholder]}>
-                                        <Text style={styles.profileInitial}>{displayInitial}</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </SafeAreaView>
-            </View>
-        );
-    }
-
-    // Default header for other pages
     return (
         <View style={styles.headerWrapper}>
             <View style={styles.headerContainer}>
@@ -188,54 +152,6 @@ const styles = StyleSheet.create({
     },
     profileInitial2: {
         fontSize: sizeScale(16),
-        fontWeight: '700',
-        color: '#fff',
-    },
-
-    // Dashboard Index Header Styles
-    dashboardHeaderWrapper: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
-        backgroundColor: '#121924',
-        paddingTop: Platform.OS === 'ios' ? 0 : sizeScale(10),
-    },
-    dashboardHeaderContent: {
-        paddingHorizontal: sizeScale(16),
-        paddingTop: sizeScale(16),
-        paddingBottom: sizeScale(12),
-    },
-    navRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        height: sizeScale(48),
-    },
-    navTitle: {
-        color: '#FFFFFF',
-        fontSize: sizeScale(22),
-        fontWeight: '600',
-        fontFamily: 'Outfit',
-        lineHeight: sizeScale(28),
-    },
-    profileContainer: {
-        borderRadius: sizeScale(8),
-        overflow: 'hidden',
-    },
-    profileThumb: {
-        width: sizeScale(32),
-        height: sizeScale(32),
-        borderRadius: sizeScale(16),
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    profilePlaceholder: {
-        backgroundColor: '#8b5cf6',
-    },
-    profileInitial: {
-        fontSize: sizeScale(14),
         fontWeight: '700',
         color: '#fff',
     },
