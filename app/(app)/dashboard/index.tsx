@@ -1,28 +1,27 @@
 // app/(app)/dashboard/index.tsx
 
-import React, { useEffect, useState, useRef } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { AlertTriangle, Gift, X } from 'lucide-react-native';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  ActivityIndicator, 
-  RefreshControl, 
-  Dimensions, 
-  TouchableOpacity,
-  Modal,
-  Share,
-  Alert,
-  Linking,
-  Image
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    Linking,
+    Modal,
+    RefreshControl,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AlertTriangle, Gift, X } from 'lucide-react-native';
-import * as Clipboard from 'expo-clipboard';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LeadCard } from '../../../components/cards/lead-card';
-import { leadsAPI, Lead } from '../../../services/leads';
+import { Lead, leadsAPI } from '../../../services/leads';
 import { companyAPI, LeadQuotaData } from '../../../services/user';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -43,6 +42,7 @@ export default function DashboardScreen() {
   
   const flatListRef = useRef<FlatList>(null);
   const leadRefs = useRef<Map<string, any>>(new Map());
+  const hasInitialFetchRef = useRef(false);
 
   const fetchData = async (isRefresh = false) => {
     try {
@@ -71,8 +71,12 @@ export default function DashboardScreen() {
     }
   };
 
-  useEffect(() => { 
-    fetchData(); 
+  useEffect(() => {
+    // Only fetch once on component mount
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchData();
+    }
   }, []);
 
   // --- Deep Link & Params Logic ---
@@ -99,7 +103,7 @@ export default function DashboardScreen() {
     Linking.getInitialURL().then((url) => { if (url) handleDeepLink({ url }); });
     const subscription = Linking.addEventListener('url', handleDeepLink);
     return () => subscription.remove();
-  }, [leads]);
+  }, []);
 
   // --- Handlers ---
   const handleReferClick = async () => {

@@ -1,6 +1,6 @@
 // app/_layout.tsx
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Linking } from 'react-native';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { NotificationProvider } from '../context/NotificationContext';
@@ -55,10 +55,16 @@ function RootLayoutNav() {
 
     if (!isAuthenticated && !inAuthGroup) {
       // Not logged in, redirect to auth
-      router.replace('/(auth)/phone-entry');
+      if (segments[0] !== '(auth)') {
+        console.log('Redirecting to phone-entry screen after logout');
+        router.replace('/(auth)/phone-entry');
+      }
     } else if (isAuthenticated && inAuthGroup) {
       // Logged in but in auth flow, redirect to app
-      router.replace('/(app)/dashboard');
+      if (segments[0] !== '(app)') {
+        console.log('Redirecting to dashboard after login');
+        router.replace('/(app)/dashboard');
+      }
     }
   }, [isAuthenticated, isLoading, segments]);
 
@@ -76,30 +82,28 @@ function RootLayoutNav() {
   );
 }
 
+// Wrapper component that uses useAuth and conditionally renders NotificationProvider
+function AuthenticatedRoot() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Only create NotificationProvider once when authenticated, don't remount it
+  const notificationProvider = useMemo(() => {
+    if (isLoading) {
+      return <RootLayoutNav />;
+    }
+    if (isAuthenticated) {
+      return <NotificationProvider><RootLayoutNav /></NotificationProvider>;
+    }
+    return <RootLayoutNav />;
+  }, [isLoading, isAuthenticated]);
+
+  return notificationProvider;
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <ConditionalNotificationProvider>
-        <RootLayoutNav />
-      </ConditionalNotificationProvider>
+      <AuthenticatedRoot />
     </AuthProvider>
   );
-}
-
-// Wrapper component that only renders NotificationProvider when authenticated
-function ConditionalNotificationProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  // Don't render NotificationProvider until auth check is complete
-  if (isLoading) {
-    return <>{children}</>;
-  }
-
-  // Only wrap with NotificationProvider if user is authenticated
-  if (isAuthenticated) {
-    return <NotificationProvider>{children}</NotificationProvider>;
-  }
-
-  // For unauthenticated users, render children without NotificationProvider
-  return <>{children}</>;
 }

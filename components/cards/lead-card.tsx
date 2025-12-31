@@ -500,25 +500,25 @@
 
 
 // components/cards/lead-card.tsx
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TouchableOpacity, 
-  Share, 
-  Modal, 
-  Dimensions, 
-  useWindowDimensions, 
-  ActivityIndicator,
-  Alert
-} from 'react-native';
 import { useRouter } from 'expo-router';
-import { MapPin, Clock, Bookmark, Share2, X, MessageCircle, AlertCircle } from 'lucide-react-native';
-import { Lead, leadsAPI } from '../../services/leads';
+import { MessageCircle, Share2, X } from 'lucide-react-native';
+import React, { useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Modal,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
+} from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { chatAPI } from '../../services/chat-websocket';
-import Svg, { Defs, LinearGradient, Stop, Circle, Path } from 'react-native-svg';
+import { Lead, leadsAPI } from '../../services/leads';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -561,7 +561,7 @@ const GradientClock = ({ size = 16 }: { size?: number }) => (
       <LinearGradient id="clockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
         <Stop offset="50%" stopColor="#003E9C" stopOpacity="1" />
         <Stop offset="50%" stopColor="#01BE8B" stopOpacity="1" />
-      </LinearGradient>``
+      </LinearGradient>
     </Defs>
     <Circle
       cx="12"

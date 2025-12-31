@@ -1,10 +1,9 @@
 // contexts/NotificationContext.tsx
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
-import { AppState, AppStateStatus, Platform } from 'react-native';
-import { notificationService, NotificationData } from '../services/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { router } from 'expo-router';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 
 interface NotificationContextType {
   notifications: NotificationData[];
@@ -27,14 +26,26 @@ export const useNotifications = () => {
   return context;
 };
 
+export interface NotificationData {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: any;
+  isRead: boolean;
+  createdAt: string;
+  leadId?: string;
+}
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<any>(null);
+  const responseListener = useRef<any>(null);
+  const notificationsModuleRef = useRef<any>(null);
+  const serviceRef = useRef<any>(null);
   const appState = useRef(AppState.currentState);
 
   // Initialize notifications after ensuring auth token exists
@@ -43,12 +54,28 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       try {
         // Wait a bit for AsyncStorage to be ready
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Check if auth token exists
-        const authToken = await AsyncStorage.getItem('auth_token');
-        
+        // If running inside Expo Go, skip notifications (expo-notifications remote push removed in Expo Go)
+        if (Constants.appOwnership === 'expo') {
+          console.log('[NotificationProvider] Running in Expo Go — skipping push/notification initialization');
+          return;
+        }
+
+        // Check if auth token exists (support both key variants)
+        const authToken = (await AsyncStorage.getItem('authToken')) || (await AsyncStorage.getItem('auth_token'));
+
         if (authToken) {
           console.log('[NotificationProvider] Auth token found, initializing...');
+          // Dynamically import modules to avoid loading expo-notifications in Expo Go
+          try {
+            const Notifications = await import('expo-notifications');
+            notificationsModuleRef.current = Notifications;
+            const svc = await import('../services/notificationService');
+            serviceRef.current = svc.notificationService;
+          } catch (impErr) {
+            console.error('[NotificationProvider] Failed to load notification modules:', impErr);
+            return;
+          }
+
           await registerForPushNotifications();
           await loadNotifications();
           setIsInitialized(true);
@@ -66,15 +93,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     initializeNotifications();
 
-    // Listen for foreground notifications
-    notificationListener.current = Notifications.addNotificationReceivedListener(
-      handleNotificationReceived
-    );
+    // Listen for foreground notifications and taps only if notifications module loaded
+    try {
+      const Notifications = notificationsModuleRef.current;
+      if (Notifications) {
+        notificationListener.current = Notifications.addNotificationReceivedListener(
+          handleNotificationReceived
+        );
 
-    // Listen for notification taps
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(
-      handleNotificationResponse
-    );
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(
+          handleNotificationResponse
+        );
+      }
+    } catch (err) {
+      console.warn('[NotificationProvider] Notification listeners not attached:', err);
+    }
 
     // Listen for app state changes
     const subscription = AppState.addEventListener('change', handleAppStateChange);
@@ -88,10 +121,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const registerForPushNotifications = async () => {
     try {
-      const token = await notificationService.registerForPushNotifications();
+      const svc = serviceRef.current;
+      if (!svc) {
+        console.warn('[NotificationProvider] Notification service not available');
+        return;
+      }
+
+      const token = await svc.registerForPushNotifications();
       if (token) {
         console.log('[NotificationProvider] Registering token with backend...');
-        await notificationService.registerTokenWithBackend(token);
+        await svc.registerTokenWithBackend(token);
         console.log('[NotificationProvider] ✅ Token registered successfully');
       }
     } catch (error) {
@@ -102,9 +141,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const loadNotifications = async () => {
     try {
       setIsLoading(true);
+      const svc = serviceRef.current;
+      if (!svc) {
+        console.warn('[NotificationProvider] Notification service not available');
+        setIsLoading(false);
+        return;
+      }
+
       const [notifs, count] = await Promise.all([
-        notificationService.getAllNotifications(),
-        notificationService.getUnreadCount(),
+        svc.getAllNotifications(),
+        svc.getUnreadCount(),
       ]);
       setNotifications(notifs);
       setUnreadCount(count);
@@ -119,40 +165,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  const handleNotificationReceived = async (notification: Notifications.Notification) => {
-    console.log('[NotificationProvider] Notification received in foreground:', notification.request.content.title);
+  const handleNotificationReceived = async (notification: any) => {
+    console.log('[NotificationProvider] Notification received in foreground:', notification?.request?.content?.title);
     
     // Add to local notifications list immediately
     const newNotification: NotificationData = {
-      id: notification.request.identifier,
-      type: notification.request.content.data?.type || 'SYSTEM',
-      title: notification.request.content.title || '',
-      body: notification.request.content.body || '',
-      data: notification.request.content.data || {},
+      id: notification.request?.identifier,
+      type: notification.request?.content?.data?.type || 'SYSTEM',
+      title: notification.request?.content?.title || '',
+      body: notification.request?.content?.body || '',
+      data: notification.request?.content?.data || {},
       isRead: false,
       createdAt: new Date().toISOString(),
-      leadId: notification.request.content.data?.leadId,
+      leadId: notification.request?.content?.data?.leadId,
     };
 
     setNotifications(prev => [newNotification, ...prev]);
     setUnreadCount(prev => prev + 1);
 
-    // Refresh from server to get the actual notification
-    setTimeout(() => loadNotifications(), 1000);
+    // Optionally refresh from server after a delay (only if needed)
+    // Removed the loadNotifications call here to prevent unnecessary rerenders
   };
 
-  const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
-    console.log('[NotificationProvider] Notification tapped:', response.notification.request.content.title);
+  const handleNotificationResponse = (response: any) => {
+    console.log('[NotificationProvider] Notification tapped:', response?.notification?.request?.content?.title);
     
-    const data = response.notification.request.content.data;
+    const data = response?.notification?.request?.content?.data;
     
     // Navigate based on notification type
     if (data?.type === 'NEW_LEAD' && data?.leadId) {
-      router.push(`/(app)/leads/${data.leadId}`);
+      router.push((`/(app)/leads/${data.leadId}`) as any);
     } else if (data?.type === 'LEAD_CONSUMED') {
-      router.push('/(app)/dashboard/my-leads');
+      router.push(("/(app)/dashboard/my-leads") as any);
     } else if (data?.screen) {
-      router.push(data.screen);
+      router.push(data.screen as any);
     } else {
       router.push('/(app)/notification');
     }
@@ -189,7 +235,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(prev => Math.max(0, prev - notificationIds.length));
 
       // Then update backend
-      await notificationService.markAsRead(notificationIds);
+      const svc = serviceRef.current;
+      if (svc) await svc.markAsRead(notificationIds);
     } catch (error) {
       console.error('[NotificationProvider] Error marking as read:', error);
       // Revert on error
@@ -207,7 +254,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(0);
 
       // Then update backend
-      await notificationService.markAllAsRead();
+      const svc = serviceRef.current;
+      if (svc) await svc.markAllAsRead();
     } catch (error) {
       console.error('[NotificationProvider] Error marking all as read:', error);
       // Revert on error
@@ -227,7 +275,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       // Then update backend
-      await notificationService.deleteNotification(notificationId);
+      const svc = serviceRef.current;
+      if (svc) await svc.deleteNotification(notificationId);
     } catch (error) {
       console.error('[NotificationProvider] Error deleting notification:', error);
       // Revert on error
@@ -243,11 +292,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setUnreadCount(0);
 
       // Then update backend
-      await notificationService.deleteAllNotifications();
+      const svc = serviceRef.current;
+      if (svc) await svc.deleteAllNotifications();
       
       // Also clear from notification center (mobile only)
       if (Platform.OS !== 'web') {
-        await notificationService.clearAllDeliveredNotifications();
+        const svc2 = serviceRef.current;
+        if (svc2) await svc2.clearAllDeliveredNotifications();
       }
     } catch (error) {
       console.error('[NotificationProvider] Error deleting all notifications:', error);

@@ -1,3 +1,4 @@
+// app/(app)/profile/index.tsx
 import React from 'react';
 import {
     View,
@@ -8,13 +9,13 @@ import {
     Dimensions,
     Linking,
     Image,
-    SafeAreaView,
     StatusBar,
     Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../../context/AuthContext';
 
 // --- Responsive Sizing Utility ---
@@ -79,10 +80,10 @@ const InfoBlock = ({ icon, title, subtitle, onPress }: InfoBlockProps) => (
 export default function ProfileScreen() {
     const router = useRouter();
     const { user, logout } = useAuth();
+    const insets = useSafeAreaInsets(); // Access safe area insets
 
     // --- Data Logic ---
     const displayName = user?.companyName || user?.userName || 'User';
-    // Priority: Logo -> UserPhoto -> Null
     const avatarUrl = user?.logo || user?.userPhoto; 
 
     // --- Actions ---
@@ -108,12 +109,8 @@ export default function ProfileScreen() {
                             if (logout) {
                                 await logout();
                             }
-                            // Navigate to phone entry screen
-                            router.replace('/(auth)/phone-entry');
                         } catch (error) {
                             console.error('Logout error:', error);
-                            // Still navigate even if logout fails
-                            router.replace('/(auth)/phone-entry');
                         }
                     }
                 }
@@ -122,11 +119,11 @@ export default function ProfileScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={COLORS.depthFrame} />
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
-            {/* --- Header --- */}
-            <View style={styles.header}>
+            {/* --- Header with Dynamic Top Padding --- */}
+            <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + sizeScale(10) }]}>
                 <View style={styles.headerSpacer} />
                 <Text style={styles.headerTitle}>Profile</Text>
                 <View style={styles.headerSpacer} />
@@ -149,14 +146,13 @@ export default function ProfileScreen() {
                         onPress={() => handleNavigation('/profile/accounts-center')}
                         activeOpacity={0.9}
                     >
-                        {/* Avatar Image Logic - Restored Simple Method */}
+                        {/* Avatar Image Logic */}
                         <View style={styles.avatarContainer}>
                             {avatarUrl ? (
                                 <Image
                                     source={{ uri: avatarUrl }}
                                     style={styles.avatarImage}
                                     resizeMode="cover"
-                                    // Key forces re-render if URL changes (fixes S3 signature issues)
                                     key={avatarUrl} 
                                 />
                             ) : (
@@ -175,10 +171,6 @@ export default function ProfileScreen() {
                             <View style={styles.viewProfileBadge}>
                                 <Text style={styles.viewProfileText}>View profile</Text>
                             </View>
-                        </View>
-
-                        <View style={styles.editButton}>
-                            <Feather name="edit-2" size={sizeScale(16)} color="#fff" />
                         </View>
                     </TouchableOpacity>
                 </LinearGradient>
@@ -201,7 +193,11 @@ export default function ProfileScreen() {
                 {/* --- 3. Info Blocks --- */}
                 <View style={styles.infoRow}>
                     <InfoBlock
-                        icon={<Image source={require('../../../assets/images/react-logo.png')} style={styles.bizzapLogo} resizeMode='contain' /> || <Text style={styles.logoText}>b</Text>}
+                        icon={
+                            <View style={styles.bLogoContainer}>
+                                <Text style={styles.bLogoText}>b</Text>
+                            </View>
+                        }
                         title="About Bizzap"
                         subtitle="Terms, policies and app versions"
                         onPress={() => handleExternalLink('https://bizzap.app/about')}
@@ -225,10 +221,10 @@ export default function ProfileScreen() {
                     <Text style={styles.logoutText}>Logout</Text>
                 </TouchableOpacity>
 
-                <View style={{ height: sizeScale(40) }} />
+                <View style={{ height: sizeScale(40) + insets.bottom }} />
 
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -243,7 +239,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         backgroundColor: COLORS.depthFrame,
         paddingHorizontal: sizeScale(16),
-        paddingVertical: sizeScale(16),
         paddingBottom: sizeScale(12),
     },
     headerSpacer: { width: sizeScale(48) },
@@ -279,12 +274,12 @@ const styles = StyleSheet.create({
         height: sizeScale(64),
         borderRadius: sizeScale(32),
         backgroundColor: '#333',
-        overflow: 'hidden', // Ensures image stays in circle
+        overflow: 'hidden', 
     },
     avatarImage: {
         width: '100%',
         height: '100%',
-        borderRadius: sizeScale(32), // Applied directly to image for Android safety
+        borderRadius: sizeScale(32),
     },
     avatarFallback: {
         backgroundColor: COLORS.fallbackAvatarBg,
@@ -316,17 +311,6 @@ const styles = StyleSheet.create({
         color: COLORS.textWhite,
         fontSize: sizeScale(12),
         fontWeight: '500',
-    },
-    editButton: {
-        position: 'absolute',
-        top: sizeScale(18),
-        right: sizeScale(16),
-        width: sizeScale(32),
-        height: sizeScale(32),
-        borderRadius: sizeScale(16),
-        backgroundColor: 'rgba(230, 224, 233, 0.16)',
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     // --- Menu Items ---
     menuContainer: {
@@ -377,14 +361,21 @@ const styles = StyleSheet.create({
         padding: sizeScale(12),
         gap: sizeScale(14),
     },
-    bizzapLogo: {
-        width: sizeScale(32),
-        height: sizeScale(32),
+    // Updated 'b' icon styles
+    bLogoContainer: {
+        width: sizeScale(30),
+        height: sizeScale(30),
+        justifyContent: 'center',
+        alignItems: 'center',
+        // Optional: faint background to define the icon shape like others
+        // backgroundColor: 'rgba(0, 87, 217, 0.1)', 
+        // borderRadius: sizeScale(8),
     },
-    logoText: {
-        fontSize: sizeScale(24),
+    bLogoText: {
+        fontSize: sizeScale(28),
         fontWeight: '900',
         color: '#0057D9',
+        lineHeight: sizeScale(32),
     },
     infoBlockTextContainer: {
         gap: sizeScale(6),

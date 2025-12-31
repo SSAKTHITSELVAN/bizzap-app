@@ -1,5 +1,4 @@
-// app/(auth)/gst-entry.tsx - UPDATED for new API
-
+// app/(auth)/gst-entry.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -14,12 +13,15 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
-  Keyboard
+  Keyboard,
+  Dimensions
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { verifyGSTNumber } from '../../services/gstVerification';
 import { Ionicons } from '@expo/vector-icons';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const GstEntryPage = () => {
   const [gstNumber, setGstNumber] = useState('');
@@ -31,103 +33,87 @@ const GstEntryPage = () => {
   const phoneNumber = params.phoneNumber as string;
   const otp = params.otp as string;
 
-  // --- Effects ---
-  
-  // Validate params
   useEffect(() => {
     if (!phoneNumber || !otp) {
-      console.error('Missing required params:', { phoneNumber, otp });
       router.replace('/(auth)/phone-entry');
     }
   }, [phoneNumber, otp]);
 
-  // Prevent Hardware Back Button
   useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      return true; 
-    });
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => backHandler.remove();
   }, []);
 
-  // --- Logic ---
-
-  // GST regex - Accepts all valid GSTIN formats
-  // Format: 06AACCG0527D1Z8 or 35AADCD4946L1CO
+  // Regex to validate GST Format
   const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}[A-Z]{1}[A-Z0-9]{1}$/;
 
   const handleGstChange = (text: string) => {
-    // Auto-capitalize input
-    setGstNumber(text.toUpperCase());
-    setError('');
+    // Force uppercase
+    const upperText = text.toUpperCase();
+    setGstNumber(upperText);
+    
+    // Clear error if user starts typing
+    if (error) setError('');
   };
 
   const handleFetchDetails = async () => {
     setError('');
     Keyboard.dismiss();
     
+    // Double check before API call (though button is disabled otherwise)
     if (!gstNumber.trim()) {
       setError('GST Number is required');
       return;
     }
     
-    const upperGST = gstNumber.toUpperCase().trim();
-    if (!gstRegex.test(upperGST)) {
+    if (!gstRegex.test(gstNumber)) {
       setError('Please enter a valid 15-digit GST number');
       return;
     }
 
     setLoading(true);
-
     try {
-      // Verify GST with internal API
-      const result = await verifyGSTNumber(upperGST);
+      const result = await verifyGSTNumber(gstNumber);
       
-      // Check if request was successful
       if (result.statusCode !== 200 || result.status !== 'success' || !result.data) {
         setLoading(false);
-        setError(result.message || 'Invalid GST Number. Please check and try again.');
-        Alert.alert('Verification Failed', result.errors || result.message || 'Could not verify GST number.');
+        setError(result.message || 'Invalid GST Number.');
         return;
       }
 
-      // Check Active Status
       if (result.data.sts !== 'Active') {
         setLoading(false);
         setError('This GST number is not active');
-        Alert.alert('Inactive Business', 'The GST number entered is currently inactive.');
         return;
       }
 
-      // Success! Navigate to profile completion
-      console.log('✅ GST Verified');
-      
       router.replace({
         pathname: '/(auth)/complete-profile',
         params: {
           phoneNumber,
           otp,
-          gstNumber: upperGST,
+          gstNumber: gstNumber,
           gstData: JSON.stringify(result.data),
         }
       });
       
     } catch (err: any) {
-      console.error('GST Verification Error:', err);
       setError('Failed to verify GST. Please try again.');
-      Alert.alert('Error', err.message || 'Failed to verify GST. Please try again.');
       setLoading(false);
     }
   };
 
+  // Check validity for button state
+  const isValidGst = gstRegex.test(gstNumber);
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0E11" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        {/* Header (Back Arrow + Title) */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.replace('/(auth)/phone-entry')} style={styles.backButton}>
              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -137,18 +123,14 @@ const GstEntryPage = () => {
         </View>
 
         <View style={styles.contentContainer}>
-          
-          {/* GST Logo Illustration */}
           <View style={styles.logoContainer}>
              <Image 
                source={{ uri: "https://image2url.com/images/1765428960732-cd2e3e5e-9d7f-44b8-a152-7d8b71d21f75.png" }}
                style={styles.logo}
                contentFit="contain"
-               transition={500}
              />
           </View>
 
-          {/* Texts */}
           <View style={styles.textSection}>
             <Text style={styles.title}>Enter your GST number</Text>
             <Text style={styles.subtitle}>
@@ -156,7 +138,6 @@ const GstEntryPage = () => {
             </Text>
           </View>
 
-          {/* Input Field */}
           <View style={styles.inputWrapper}>
              <TextInput
                style={[styles.input, error ? styles.inputError : null]}
@@ -177,16 +158,18 @@ const GstEntryPage = () => {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
-
         </View>
 
-        {/* Footer Button */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.button, (loading || !gstNumber.trim()) && styles.buttonDisabled]}
+            style={[
+              styles.button, 
+              // Disable visual style if loading OR invalid regex
+              (loading || !isValidGst) && styles.buttonDisabled
+            ]}
             onPress={handleFetchDetails}
-            disabled={loading || !gstNumber.trim()}
-            activeOpacity={0.8}
+            // Disable interaction if loading OR invalid regex
+            disabled={loading || !isValidGst}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -195,7 +178,6 @@ const GstEntryPage = () => {
             )}
           </TouchableOpacity>
         </View>
-
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -207,49 +189,37 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#0B0E11',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   container: {
     flex: 1,
   },
-  
-  // Header
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    marginBottom: 10,
-  },
-  backButton: {
-    padding: 4,
+    height: 56,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-
   contentContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    alignItems: 'center',
   },
-
-  // Logo
   logoContainer: {
-    height: 180,
-    width: '100%',
+    height: SCREEN_HEIGHT * 0.2,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 30,
+    marginVertical: 20,
   },
   logo: {
-    width: 200,
-    height: 140,
+    width: '100%',
+    height: '100%',
   },
-
-  // Texts
   textSection: {
     alignItems: 'center',
     marginBottom: 30,
@@ -266,13 +236,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: 10,
-  },
-
-  // Input
-  inputWrapper: {
-    width: '100%',
-    marginBottom: 16,
   },
   input: {
     width: '100%',
@@ -284,45 +247,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     paddingHorizontal: 16,
     fontSize: 16,
-    fontWeight: '500',
   },
-  inputError: {
-    borderColor: '#EF4444',
-  },
-
-  // Error
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  errorText: {
-    color: '#EF4444',
-    fontSize: 13,
-  },
-
-  // Footer
+  inputError: { borderColor: '#EF4444' },
+  errorContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  errorText: { color: '#EF4444', fontSize: 13 },
   footer: {
     padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 24,
-    width: '100%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
   button: {
-    width: '100%',
     backgroundColor: '#005CE6',
     height: 54,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.5,
-    backgroundColor: '#1E293B',
+  buttonDisabled: { 
+    opacity: 0.5, 
+    backgroundColor: '#1E293B' // Darker/Greyed out color
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+  buttonText: { 
+    color: '#FFFFFF', 
+    fontSize: 16, 
+    fontWeight: '700' 
   },
 });

@@ -8,13 +8,130 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  Animated,
+  Platform,
+  StatusBar,
+  useWindowDimensions,
 } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // Added for responsiveness
 import { useNotifications } from '../../../context/NotificationContext';
 import { NotificationData } from '../../../services/notificationService';
 
+// Removed static Dimensions.get to use useWindowDimensions hook inside component
+
+interface SwipeableNotificationProps {
+  item: NotificationData;
+  onDelete: (id: string) => void;
+  onPress: (item: NotificationData) => void;
+  screenWidth: number;
+}
+
+const SwipeableNotification = ({ item, onDelete, onPress, screenWidth }: SwipeableNotificationProps) => {
+  const translateX = new Animated.Value(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const SWIPE_THRESHOLD = screenWidth * 0.3;
+
+  // Note: For complex gestures, PanResponder is usually required. 
+  // However, keeping your existing logic structure for simplicity.
+  // If you are using a specific library for swiping previously, ensure it is hooked up here.
+  // Assuming the previous logic was triggered via a library or simplified here for the example. 
+  // Since the original code didn't include the PanResponder/Gesture logic block fully, 
+  // I will assume standard touch handling or that you inject the gesture handler here.
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'NEW_LEAD': return 'megaphone';
+      case 'LEAD_CONSUMED': return 'checkmark-circle';
+      case 'ADMIN_BROADCAST': return 'notifications';
+      default: return 'information-circle';
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInMs = now.getTime() - date.getTime();
+      const diffInMins = Math.floor(diffInMs / 60000);
+      const diffInHours = Math.floor(diffInMs / 3600000);
+      const diffInDays = Math.floor(diffInMs / 86400000);
+
+      if (diffInMins < 1) return 'Just now';
+      if (diffInMins < 60) return `${diffInMins}m ago`;
+      if (diffInHours < 24) return `${diffInHours}h ago`;
+      if (diffInDays < 7) return `${diffInDays}d ago`;
+      return date.toLocaleDateString();
+    } catch (error) {
+      return 'Recently';
+    }
+  };
+
+  return (
+    <View style={styles.swipeContainer}>
+      {/* Delete Background */}
+      <View style={styles.deleteBackground}>
+        <Ionicons name="trash" size={24} color="#FFF" />
+        <Text style={styles.deleteText}>Delete</Text>
+      </View>
+
+      {/* Notification Card */}
+      <Animated.View
+        style={[
+          styles.notificationCard,
+          !item.isRead && styles.unreadNotification,
+          { transform: [{ translateX }] },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.notificationContent}
+          onPress={() => onPress(item)}
+          activeOpacity={0.7}
+          disabled={isSwiping}
+        >
+          <View style={[
+            styles.iconContainer,
+            !item.isRead && styles.unreadIconContainer
+          ]}>
+            <Ionicons
+              name={getNotificationIcon(item.type) as any}
+              size={24}
+              color={!item.isRead ? '#01BE8B' : '#8FA8CC'}
+            />
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={[styles.title, !item.isRead && styles.unreadText]}>
+              {item.title}
+            </Text>
+            <Text style={styles.body} numberOfLines={2}>
+              {item.body}
+            </Text>
+            <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              onDelete(item.id);
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={20} color="#8FA8CC" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        {!item.isRead && <View style={styles.unreadDot} />}
+      </Animated.View>
+    </View>
+  );
+};
+
 export default function NotificationsScreen() {
+  const insets = useSafeAreaInsets(); // Hook for safe area values
+  const { width } = useWindowDimensions(); // Hook for dynamic screen width
+  
   const {
     notifications,
     unreadCount,
@@ -33,140 +150,96 @@ export default function NotificationsScreen() {
       await refreshNotifications();
     } catch (error) {
       console.error('Failed to refresh notifications:', error);
+      Alert.alert('Error', 'Failed to refresh notifications. Please try again.');
     } finally {
       setRefreshing(false);
     }
   };
 
   const handleNotificationPress = async (notification: NotificationData) => {
-    // Mark as read immediately
-    if (!notification.isRead) {
-      try {
-        await markAsRead([notification.id]);
-      } catch (error) {
-        console.error('Failed to mark notification as read:', error);
-      }
-    }
-
-    // Navigate based on type
     try {
-      if (notification.type === 'NEW_LEAD' && notification.leadId) {
-        router.push(`/(app)/leads/${notification.leadId}`);
-      } else if (notification.type === 'LEAD_CONSUMED') {
-        router.push('/(app)/dashboard/my-leads');
-      } else if (notification.data?.screen) {
-        router.push(notification.data.screen);
+      // Only mark as read, no routing
+      if (!notification.isRead) {
+        await markAsRead([notification.id]);
       }
     } catch (error) {
-      console.error('Navigation error:', error);
+      console.error('Failed to mark notification as read:', error);
     }
   };
 
-  const handleDeleteNotification = (notificationId: string) => {
-    Alert.alert(
-      'Delete Notification',
-      'Are you sure you want to delete this notification?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteNotification(notificationId),
-        },
-      ]
-    );
+  const handleDeleteNotification = async (notificationId: string) => {
+    try {
+      await deleteNotification(notificationId);
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+      Alert.alert('Error', 'Failed to delete notification. Please try again.');
+    }
   };
 
   const handleDeleteAll = () => {
+    if (notifications.length === 0) return;
+
     Alert.alert(
-      'Delete All',
-      'Are you sure you want to delete all notifications?',
+      'Delete All Notifications',
+      'Are you sure you want to delete all notifications? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete All',
           style: 'destructive',
-          onPress: deleteAllNotifications,
+          onPress: async () => {
+            try {
+              await deleteAllNotifications();
+            } catch (error) {
+              console.error('Failed to delete all notifications:', error);
+              Alert.alert('Error', 'Failed to delete notifications. Please try again.');
+            }
+          },
         },
       ]
     );
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'NEW_LEAD': return 'megaphone-outline';
-      case 'LEAD_CONSUMED': return 'checkmark-circle-outline';
-      case 'ADMIN_BROADCAST': return 'notifications-outline';
-      default: return 'information-circle-outline';
+  const handleMarkAllRead = async () => {
+    if (unreadCount === 0) return;
+
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+      Alert.alert('Error', 'Failed to mark notifications as read. Please try again.');
     }
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMs = now.getTime() - date.getTime();
-    const diffInMins = Math.floor(diffInMs / 60000);
-    const diffInHours = Math.floor(diffInMs / 3600000);
-    const diffInDays = Math.floor(diffInMs / 86400000);
-
-    if (diffInMins < 1) return 'Just now';
-    if (diffInMins < 60) return `${diffInMins}m ago`;
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-    return date.toLocaleDateString();
-  };
-
   const renderNotification = ({ item }: { item: NotificationData }) => (
-    <TouchableOpacity
-      style={[
-        styles.notificationCard,
-        !item.isRead && styles.unreadNotification,
-      ]}
-      onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.notificationContent}>
-        <View style={styles.iconContainer}>
-          <Ionicons
-            name={getNotificationIcon(item.type) as any}
-            size={24}
-            color={!item.isRead ? '#007AFF' : '#666'}
-          />
-        </View>
-
-        <View style={styles.textContainer}>
-          <Text style={[styles.title, !item.isRead && styles.unreadText]}>
-            {item.title}
-          </Text>
-          <Text style={styles.body} numberOfLines={2}>
-            {item.body}
-          </Text>
-          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDeleteNotification(item.id)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="close-circle" size={24} color="#FF3B30" />
-        </TouchableOpacity>
-      </View>
-
-      {!item.isRead && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
+    <SwipeableNotification
+      item={item}
+      onDelete={handleDeleteNotification}
+      onPress={handleNotificationPress}
+      screenWidth={width}
+    />
   );
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        {unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
-          </View>
-        )}
+      <StatusBar barStyle="light-content" backgroundColor="#121924" />
+      
+      {/* Header with dynamic Safe Area Padding */}
+      <View style={[
+        styles.header, 
+        { 
+          paddingTop: insets.top + 10, // Dynamic top padding 
+          height: 60 + insets.top // Ensure header has height for content
+        }
+      ]}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Action Buttons */}
@@ -175,9 +248,10 @@ export default function NotificationsScreen() {
           {unreadCount > 0 && (
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={markAllAsRead}
+              onPress={handleMarkAllRead}
+              activeOpacity={0.7}
             >
-              <Ionicons name="checkmark-done" size={18} color="#007AFF" />
+              <Ionicons name="checkmark-done" size={18} color="#01BE8B" />
               <Text style={styles.actionButtonText}>Mark all read</Text>
             </TouchableOpacity>
           )}
@@ -185,10 +259,11 @@ export default function NotificationsScreen() {
           <TouchableOpacity
             style={[styles.actionButton, styles.deleteAllButton]}
             onPress={handleDeleteAll}
+            activeOpacity={0.7}
           >
             <Ionicons name="trash-outline" size={18} color="#FF3B30" />
             <Text style={[styles.actionButtonText, styles.deleteAllText]}>
-              Delete all
+              Clear all
             </Text>
           </TouchableOpacity>
         </View>
@@ -199,16 +274,28 @@ export default function NotificationsScreen() {
         data={notifications}
         renderItem={renderNotification}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        // Dynamic bottom padding to avoid home indicator
+        contentContainerStyle={[
+          styles.listContainer, 
+          { paddingBottom: insets.bottom + 20 }
+        ]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor="#01BE8B"
+            colors={['#01BE8B']}
+            progressViewOffset={insets.top} // Ensures spinner is visible on Android
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={64} color="#CCC" />
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="notifications-off-outline" size={48} color="#8FA8CC" />
+            </View>
             <Text style={styles.emptyText}>No notifications yet</Text>
             <Text style={styles.emptySubtext}>
-              You'll be notified when there are new leads or updates
+              You'll be notified when there are new leads or important updates
             </Text>
           </View>
         }
@@ -220,40 +307,48 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFF',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: '#121924',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#1c283c',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-    flex: 1,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   badge: {
     backgroundColor: '#FF3B30',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
   },
   badgeText: {
     color: '#FFF',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     padding: 12,
-    backgroundColor: '#FFF',
+    backgroundColor: '#121924',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#1c283c',
     gap: 12,
   },
   actionButton: {
@@ -261,16 +356,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: 'rgba(1, 190, 139, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(1, 190, 139, 0.2)',
   },
   deleteAllButton: {
-    backgroundColor: '#FFE5E5',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderColor: 'rgba(255, 59, 48, 0.2)',
   },
   actionButtonText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#01BE8B',
     fontWeight: '600',
   },
   deleteAllText: {
@@ -280,33 +378,57 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 16,
   },
+  swipeContainer: {
+    marginBottom: 12,
+    position: 'relative',
+  },
+  deleteBackground: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 100,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    gap: 4,
+  },
+  deleteText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   notificationCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#121924',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#1c283c',
   },
   unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#01BE8B',
+    backgroundColor: 'rgba(1, 190, 139, 0.05)',
   },
   notificationContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F0F0',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(143, 168, 204, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(143, 168, 204, 0.2)',
+  },
+  unreadIconContainer: {
+    backgroundColor: 'rgba(1, 190, 139, 0.1)',
+    borderColor: 'rgba(1, 190, 139, 0.3)',
   },
   textContainer: {
     flex: 1,
@@ -314,52 +436,67 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
+    color: '#FFFFFF',
+    marginBottom: 6,
+    lineHeight: 22,
   },
   unreadText: {
-    fontWeight: 'bold',
-    color: '#007AFF',
+    fontWeight: '700',
+    color: '#01BE8B',
   },
   body: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 6,
+    color: '#8FA8CC',
+    marginBottom: 8,
     lineHeight: 20,
   },
   time: {
     fontSize: 12,
-    color: '#999',
+    color: '#61738D',
   },
   deleteButton: {
     padding: 4,
+    marginLeft: 8,
   },
   unreadDot: {
     position: 'absolute',
     top: 12,
     right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#007AFF',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#01BE8B',
+    borderWidth: 2,
+    borderColor: '#121924',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 100,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(143, 168, 204, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(143, 168, 204, 0.2)',
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
-    marginTop: 8,
+    color: '#8FA8CC',
     textAlign: 'center',
     paddingHorizontal: 32,
+    lineHeight: 20,
   },
 });

@@ -38,6 +38,9 @@ const CompanyResultCard = ({ company, onFollowChange }: CompanyResultCardProps) 
     router.push(`/search/${company.id}`);
   };
 
+  // Get the best available address
+  const displayAddress = company.address || company.operationalAddress || company.registeredAddress;
+
   return (
     <TouchableOpacity 
       style={styles.companyResultCard} 
@@ -45,19 +48,22 @@ const CompanyResultCard = ({ company, onFollowChange }: CompanyResultCardProps) 
       onPress={handleCardPress}
     >
       <Image
-        source={{ uri: company.logo || 'https://via.placeholder.com/48/0D0D0D/ffffff?text=C' }}
+        source={{ uri: company.logo || 'https://via.placeholder.com/40/0D0D0D/ffffff?text=C' }}
         style={styles.companyResultLogo}
       />
       <View style={styles.companyResultInfo}>
         <Text style={styles.companyResultName} numberOfLines={1}>
           {company.companyName}
         </Text>
-        <Text style={styles.companyResultCategory} numberOfLines={1}>
-          {company.category || 'Business'}
-        </Text>
-        <Text style={styles.companyResultFollowers}>
-          {company.followersCount || 0} followers
-        </Text>
+        {displayAddress ? (
+          <Text style={styles.companyResultAddress} numberOfLines={1}>
+            {displayAddress}
+          </Text>
+        ) : (
+          <Text style={styles.companyResultCategory} numberOfLines={1}>
+            {company.category || 'Business'}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -288,7 +294,7 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121924',
+    backgroundColor: '#000000', // Changed to black like dashboard
   },
   
   // Search Bar
@@ -299,7 +305,7 @@ const styles = StyleSheet.create({
     paddingTop: sizeScale(60),
     paddingBottom: sizeScale(12),
     gap: sizeScale(12),
-    backgroundColor: '#121924',
+    backgroundColor: '#121924', // Keep header with original color
   },
   gradientBorder: {
     flex: 1,
@@ -336,6 +342,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000000', // Black background
   },
   loadingText: {
     marginTop: sizeScale(12),
@@ -348,7 +355,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 0.5,
     borderBottomColor: '#2a2a2a',
-    backgroundColor: '#121924',
+    backgroundColor: '#000000', // Black background
   },
   tab: {
     flex: 1,
@@ -373,6 +380,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000000', // Black background
   },
   emptySearchState: {
     alignItems: 'center',
@@ -395,11 +403,13 @@ const styles = StyleSheet.create({
   // Results Container
   resultsContainer: {
     paddingBottom: sizeScale(100),
+    backgroundColor: '#121924', // Keep accounts tab with original color
   },
   leadsResultsContainer: {
     paddingHorizontal: sizeScale(16),
     paddingTop: sizeScale(12),
     paddingBottom: sizeScale(100),
+    backgroundColor: '#000000', // Black background for leads
   },
 
   // Company Result Card
@@ -407,33 +417,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: sizeScale(16),
-    paddingVertical: sizeScale(12),
-    gap: sizeScale(12),
-    backgroundColor: '#121924',
+    paddingVertical: sizeScale(10),
+    gap: sizeScale(10),
+    backgroundColor: '#121924', // Keep company cards with original color
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#2a2a2a',
   },
   companyResultLogo: {
-    width: sizeScale(48),
-    height: sizeScale(48),
-    borderRadius: sizeScale(24),
+    width: sizeScale(40),
+    height: sizeScale(40),
+    borderRadius: sizeScale(20),
     backgroundColor: '#1a1a1a',
   },
   companyResultInfo: {
     flex: 1,
   },
   companyResultName: {
-    fontSize: sizeScale(15),
+    fontSize: sizeScale(14),
     fontWeight: '600',
     color: '#fff',
-    marginBottom: sizeScale(2),
+    marginBottom: sizeScale(3),
   },
   companyResultCategory: {
-    fontSize: sizeScale(13),
+    fontSize: sizeScale(12),
     color: '#666',
-    marginBottom: sizeScale(2),
   },
-  companyResultFollowers: {
-    fontSize: sizeScale(13),
-    color: '#666',
+  companyResultAddress: {
+    fontSize: sizeScale(12),
+    color: '#8FA8CC',
   },
   followButton: {
     paddingHorizontal: sizeScale(24),
@@ -466,6 +477,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: sizeScale(80),
+    backgroundColor: '#000000', // Black background
   },
   emptyText: {
     fontSize: sizeScale(16),
