@@ -44,7 +44,7 @@ export default function BizzapAIScreen() {
 
   // Editable fields for preview
   const [editableTitle, setEditableTitle] = useState('');
-  const [editableDescription, setEditableDescription] = useState(''); // Kept in state for API, hidden from UI
+  const [editableDescription, setEditableDescription] = useState(''); 
   const [editableQuantity, setEditableQuantity] = useState('');
   const [editableLocation, setEditableLocation] = useState('');
   const [editableBudget, setEditableBudget] = useState('');
@@ -77,15 +77,7 @@ export default function BizzapAIScreen() {
   };
 
   const handleGenerate = async () => {
-    // 1. Mandatory Image Check
-    if (!uploadedImage) {
-        Alert.alert(
-            "Image Required", 
-            "Please attach an image before generating.",
-            [{ text: "OK", onPress: handleImagePicker }]
-        );
-        return;
-    }
+    // Removed Mandatory Image Check
 
     const trimmedInput = inputText.trim();
     if (!trimmedInput) {
@@ -100,7 +92,7 @@ export default function BizzapAIScreen() {
         const data = response.data;
         setExtractedData(data);
         setEditableTitle(data.title || '');
-        setEditableDescription(data.description || ''); // Saved for API
+        setEditableDescription(data.description || ''); 
         setEditableQuantity(data.quantity || '');
         setEditableLocation(data.location || '');
         setEditableBudget(data.budget || '');
@@ -124,7 +116,7 @@ export default function BizzapAIScreen() {
     try {
       const leadPayload: any = {
         title: editableTitle.trim(),
-        description: editableDescription.trim(), // Sent to API, but hidden from Preview UI
+        description: editableDescription.trim(), 
         quantity: editableQuantity.trim(),
         location: editableLocation.trim(),
         budget: editableBudget.trim(),
@@ -180,7 +172,7 @@ export default function BizzapAIScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#121924" translucent={false} />
       
-      {/* Header - No Back Button */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Post a Requirement</Text>
@@ -197,7 +189,7 @@ export default function BizzapAIScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Main Input Card with Blue-Teal Gradient Border */}
+          {/* Main Input Card */}
           <LinearGradient
             colors={GRADIENT_COLORS}
             start={{ x: 0, y: 0 }}
@@ -221,8 +213,9 @@ export default function BizzapAIScreen() {
                       <MaterialCommunityIcons name="image-outline" size={24} color="#8FA8CC" />
                     </View>
                   )}
+                  {/* Changed text to indicate optional */}
                   <Text style={styles.attachmentText}>
-                    {uploadedImage ? 'Image Attached' : 'Attach Image (Mandatory)'}
+                    {uploadedImage ? 'Image Attached' : 'Attach Image (Optional)'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -231,7 +224,7 @@ export default function BizzapAIScreen() {
               <View style={styles.inputArea}>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Describe your requirement here..."
+                  placeholder="Describe your requirement here... (e.g., I need 500 safety gloves in Mumbai)"
                   placeholderTextColor="#61738D"
                   multiline
                   value={inputText}
@@ -240,7 +233,7 @@ export default function BizzapAIScreen() {
                 />
               </View>
 
-              {/* Generate Button: Gradient Border, Pure Blue Fill */}
+              {/* Generate Button */}
               <View style={styles.buttonContainer}>
                 <TouchableOpacity
                   onPress={handleGenerate}
@@ -258,7 +251,7 @@ export default function BizzapAIScreen() {
                         {isGenerating ? (
                         <ActivityIndicator color="#fff" size="small" />
                         ) : (
-                        <Text style={styles.buttonText}>Post</Text>
+                        <Text style={styles.buttonText}>Generate</Text>
                         )}
                     </View>
                   </LinearGradient>
@@ -270,25 +263,31 @@ export default function BizzapAIScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Preview Modal */}
+      {/* Preview Modal - Responsive Fix */}
       <Modal 
         visible={showPreview} 
         animationType="slide" 
         transparent
         onRequestClose={() => !isSubmitting && handleDoAgain()}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalContainer}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { maxHeight: screenHeight * 0.9 }]}>
+        <View style={styles.modalOverlay}>
+          {/* KeyboardAvoidingView wrapped around the content inside overlay */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalKeyboardAvoid}
+          >
+            <View style={[styles.modalContent, { maxHeight: '90%' }]}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Review Your Lead</Text>
                 <Text style={styles.modalSubtitle}>Edit any field before posting</Text>
               </View>
               
-              <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView 
+                style={styles.previewScroll} 
+                contentContainerStyle={styles.previewScrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.previewForm}>
                   {/* Title */}
                   <View style={styles.formGroup}>
@@ -349,8 +348,6 @@ export default function BizzapAIScreen() {
                       />
                     </View>
                   </View>
-
-                  {/* Description Removed from Preview UI */}
                 </View>
               </ScrollView>
 
@@ -370,7 +367,6 @@ export default function BizzapAIScreen() {
                   onPress={handleSubmitLead}
                   disabled={isSubmitting}
                 >
-                  {/* Same Gradient Border Button Style for Submit */}
                   <LinearGradient
                     colors={GRADIENT_COLORS}
                     start={{ x: 0, y: 0 }}
@@ -391,8 +387,8 @@ export default function BizzapAIScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Success Modal */}
@@ -428,7 +424,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', // Centered Title
+    justifyContent: 'center',
     paddingHorizontal: 16,
   },
   headerTitle: {
@@ -540,7 +536,7 @@ const styles = StyleSheet.create({
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 2, // Thickness of the gradient border
+    padding: 2,
     borderRadius: 10,
   },
   // Solid Blue Inner Button
@@ -548,7 +544,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     backgroundColor: PURE_BLUE,
-    borderRadius: 8, // Slightly less than outer radius
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -559,12 +555,13 @@ const styles = StyleSheet.create({
   },
 
   // Modal Styles
-  modalContainer: {
-    flex: 1,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'flex-end',
+  },
+  modalKeyboardAvoid: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -572,6 +569,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
+    width: '100%',
   },
   modalHeader: {
     alignItems: 'center',
@@ -589,6 +587,12 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     color: '#8FA8CC',
     fontSize: 14,
+  },
+  previewScroll: {
+    marginBottom: 10,
+  },
+  previewScrollContent: {
+    flexGrow: 1,
   },
   previewForm: {
     backgroundColor: '#121924',

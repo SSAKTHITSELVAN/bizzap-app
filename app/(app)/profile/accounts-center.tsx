@@ -1,3 +1,4 @@
+// app/(app)/profile/account-center.tsx
 import React, { useState } from 'react';
 import {
     View,
@@ -20,7 +21,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { companyAPI } from '../../../services/user';
 
 // --- Responsive Sizing Utility ---
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STANDARD_WIDTH = 390;
 const sizeScale = (size: number): number => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
 
@@ -65,13 +66,31 @@ export default function AccountsCenterScreen() {
     const handleBack = () => router.back();
     const handleEdit = () => router.push('/profile/edit-profile');
     
+    const generateProfileLink = () => {
+        const companyId = profileData?.id || user?.id;
+        if (!companyId) return 'https://bizzap.app';
+        return `https://bizzap.app/companies/${companyId}`;
+    };
+
     const handleShare = async () => {
         try {
+            const displayData = profileData || user || {};
+            const profileLink = generateProfileLink();
+            
+            const name = displayData.companyName || displayData.userName || 'Profile';
+            
+            const shareMessage = `📱 Check out ${name} on Bizzap!\n\n` +
+                (displayData.description ? `${displayData.description}\n\n` : '') +
+                (displayData.address ? `📍 ${displayData.address}\n\n` : '') +
+                `View full profile: ${profileLink}`;
+
             await Share.share({
-                message: `Check out ${user?.companyName || 'my profile'} on Bizzap!`,
+                message: shareMessage,
+                title: `${name} - Bizzap Profile`,
+                url: profileLink,
             });
         } catch (error) {
-            console.error(error);
+            console.error('Share error:', error);
         }
     };
 
@@ -120,7 +139,7 @@ export default function AccountsCenterScreen() {
                             <Image source={{ uri: avatarImage }} style={styles.avatar} />
                         </View>
                         
-                        {/* New Action Bar (Replaces Change Profile Text) */}
+                        {/* Action Bar with Edit and Share */}
                         <View style={styles.actionRow}>
                             <TouchableOpacity onPress={handleEdit} style={styles.circleAction}>
                                 <Feather name="edit-2" size={sizeScale(18)} color="#fff" />
@@ -155,10 +174,16 @@ export default function AccountsCenterScreen() {
                     </LinearGradient>
                 </View>
 
-                {/* --- DETAILS LIST --- */}
+                {/* --- DETAILS LIST (UPDATED) --- */}
                 <View style={styles.detailsList}>
                     <DetailItem label="GST Number" value={displayData.gstNumber} />
-                    <DetailItem label="PAN" value={displayData.panNumber || displayData.pan} />
+                    <DetailItem label="Phone" value={displayData.phoneNumber} />
+                    <DetailItem label="Category" value={displayData.category} />
+                    
+                    {displayData.description ? (
+                        <DetailItem label="About" value={displayData.description} />
+                    ) : null}
+
                     <DetailItem label="Address" value={displayData.address} isLast />
                 </View>
 
@@ -173,7 +198,7 @@ const DetailItem = ({ label, value, isLast }: any) => (
     <>
         <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>{label}</Text>
-            <Text style={styles.detailValue} numberOfLines={2}>{value || 'Not provided'}</Text>
+            <Text style={styles.detailValue} numberOfLines={3}>{value || 'Not provided'}</Text>
         </View>
         {!isLast && <View style={styles.detailDivider} />}
     </>

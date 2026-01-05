@@ -1,22 +1,24 @@
+
 // // components/cards/lead-card.tsx
-// import React, { useState } from 'react';
-// import { 
-//   View, 
-//   Text, 
-//   StyleSheet, 
-//   Image, 
-//   TouchableOpacity, 
-//   Share, 
-//   Modal, 
-//   Dimensions, 
-//   useWindowDimensions, 
-//   ActivityIndicator,
-//   Alert
-// } from 'react-native';
 // import { useRouter } from 'expo-router';
-// import { MapPin, Clock, Bookmark, Share2, X, MessageCircle, AlertCircle } from 'lucide-react-native';
-// import { Lead, leadsAPI } from '../../services/leads';
+// import { MessageCircle, Share2, X } from 'lucide-react-native';
+// import React, { useState } from 'react';
+// import {
+//     ActivityIndicator,
+//     Alert,
+//     Dimensions,
+//     Image,
+//     Modal,
+//     Share,
+//     StyleSheet,
+//     Text,
+//     TouchableOpacity,
+//     useWindowDimensions,
+//     View
+// } from 'react-native';
+// import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 // import { chatAPI } from '../../services/chat-websocket';
+// import { Lead, leadsAPI } from '../../services/leads';
 
 // const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -24,6 +26,85 @@
 //   lead: Lead;
 //   onConsumeSuccess?: () => void;
 // }
+
+// // Gradient Icon Components
+// const GradientMapPin = ({ size = 16 }: { size?: number }) => (
+//   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+//     <Defs>
+//       <LinearGradient id="mapPinGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+//         <Stop offset="50%" stopColor="#003E9C" stopOpacity="1" />
+//         <Stop offset="50%" stopColor="#01BE8B" stopOpacity="1" />
+//       </LinearGradient>
+//     </Defs>
+//     <Path
+//       d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+//       stroke="url(#mapPinGradient)"
+//       strokeWidth="2"
+//       strokeLinecap="round"
+//       strokeLinejoin="round"
+//     />
+//     <Circle
+//       cx="12"
+//       cy="10"
+//       r="3"
+//       stroke="url(#mapPinGradient)"
+//       strokeWidth="2"
+//       strokeLinecap="round"
+//       strokeLinejoin="round"
+//     />
+//   </Svg>
+// );
+
+// const GradientClock = ({ size = 16 }: { size?: number }) => (
+//   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+//     <Defs>
+//       <LinearGradient id="clockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+//         <Stop offset="50%" stopColor="#003E9C" stopOpacity="1" />
+//         <Stop offset="50%" stopColor="#01BE8B" stopOpacity="1" />
+//       </LinearGradient>
+//     </Defs>
+//     <Circle
+//       cx="12"
+//       cy="12"
+//       r="10"
+//       stroke="url(#clockGradient)"
+//       strokeWidth="2"
+//       strokeLinecap="round"
+//       strokeLinejoin="round"
+//     />
+//     <Path
+//       d="M12 6v6l4 2"
+//       stroke="url(#clockGradient)"
+//       strokeWidth="2"
+//       strokeLinecap="round"
+//       strokeLinejoin="round"
+//     />
+//   </Svg>
+// );
+
+// // Time formatting helper
+// const formatTimeAgo = (dateString: string): string => {
+//   const now = new Date();
+//   const past = new Date(dateString);
+//   const diffMs = now.getTime() - past.getTime();
+//   const diffMins = Math.floor(diffMs / 60000);
+//   const diffHours = Math.floor(diffMins / 60);
+//   const diffDays = Math.floor(diffHours / 24);
+
+//   if (diffMins < 1) return 'Just now';
+//   if (diffMins < 60) return `${diffMins}m ago`;
+//   if (diffHours < 24) return `${diffHours}h ago`;
+//   if (diffDays === 1) return 'Yesterday';
+//   if (diffDays < 7) return `${diffDays}d ago`;
+  
+//   // For older dates, show formatted date
+//   const options: Intl.DateTimeFormatOptions = { 
+//     month: 'short', 
+//     day: 'numeric',
+//     year: past.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+//   };
+//   return past.toLocaleDateString('en-US', options);
+// };
 
 // export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
 //   const router = useRouter();
@@ -39,8 +120,6 @@
 
 //   // --- Generate Deep Link ---
 //   const generateLeadLink = () => {
-//     // Format: bizzap://dashboard?leadId={leadId}
-//     // For web fallback: https://bizzap.app/dashboard?leadId={leadId}
 //     return `https://bizzap.app/dashboard?leadId=${lead.id}`;
 //   };
 
@@ -58,7 +137,7 @@
 //       await Share.share({
 //         message,
 //         title: `Lead: ${lead.title}`,
-//         url: leadLink, // iOS will use this
+//         url: leadLink,
 //       });
 //     } catch (error) {
 //       console.error('Error sharing:', error);
@@ -74,17 +153,14 @@
 //     try {
 //       setIsConsuming(true);
 
-//       // 1. Consume the lead
 //       const consumeResponse = await leadsAPI.consumeLead(lead.id);
 
 //       if (consumeResponse.status === 'success') {
         
-//         // 2. Refresh dashboard quota
 //         if (onConsumeSuccess) {
 //           onConsumeSuccess();
 //         }
 
-//         // 3. Auto-post first message
 //         const starterMessage = `Hello, I saw your lead "${lead.title}" in ${lead.location || 'your area'} and would like to discuss the requirements.`;
         
 //         try {
@@ -97,11 +173,9 @@
 //             console.warn("Failed to send auto-message, navigating anyway", msgError);
 //         }
 
-//         // 4. Close Modal
 //         setShowConsumeModal(false);
 //         setIsConsuming(false);
 
-//         // 5. Navigate to Chat
 //         router.push({
 //             pathname: '/(app)/chat/[companyId]',
 //             params: { companyId: lead.companyId }
@@ -129,12 +203,16 @@
 //           </Text>
 //           <View style={styles.metaRow}>
 //             <View style={styles.metaGroup}>
-//               <MapPin size={16} color="#8FA8CC" />
-//               <Text style={styles.metaLabel} numberOfLines={1}>{lead.location}</Text>
+//               <GradientMapPin size={16} />
+//               <Text style={styles.metaLabel} numberOfLines={1}>
+//                 {lead.location || 'Location not specified'}
+//               </Text>
 //             </View>
 //             <View style={styles.metaGroup}>
-//               <Clock size={16} color="#8FA8CC" />
-//               <Text style={styles.metaLabel} numberOfLines={1}>10:30 AM Today</Text>
+//               <GradientClock size={16} />
+//               <Text style={styles.metaLabel} numberOfLines={1}>
+//                 {formatTimeAgo(lead.createdAt)}
+//               </Text>
 //             </View>
 //           </View>
 //         </TouchableOpacity>
@@ -165,13 +243,6 @@
 //           </View>
 //         </View>
 
-//         {/* Expanded Description */}
-//         {expanded && lead.description && (
-//           <View style={styles.descriptionContainer}>
-//             <Text style={styles.descriptionText}>{lead.description}</Text>
-//           </View>
-//         )}
-
 //         {/* Footer Bar */}
 //         <View style={styles.footerBar}>
 //           <View style={styles.utilIcons}>
@@ -188,7 +259,7 @@
 //             onPress={handleChatPress}
 //             activeOpacity={0.8}
 //           >
-//             <Text style={styles.chatText}>Talk to Buyer</Text>
+//             <Text style={styles.chatText}>Chat with Buyer</Text>
 //           </TouchableOpacity>
 //         </View>
 //       </View>
@@ -350,16 +421,6 @@
 //     fontWeight: '700',
 //     textAlign: 'center',
 //   },
-//   descriptionContainer: {
-//     marginBottom: 20,
-//     paddingHorizontal: 4,
-//   },
-//   descriptionText: {
-//     color: '#D1D5DB',
-//     fontSize: 13,
-//     lineHeight: 20,
-//     fontFamily: 'Outfit',
-//   },
 //   footerBar: {
 //     height: 40,
 //     backgroundColor: 'rgba(0, 87, 217, 0.17)',
@@ -501,8 +562,8 @@
 
 // components/cards/lead-card.tsx
 import { useRouter } from 'expo-router';
-import { MessageCircle, Share2, X } from 'lucide-react-native';
-import React, { useState } from 'react';
+import { MessageCircle, Share2, X, Gift } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -519,12 +580,14 @@ import {
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { chatAPI } from '../../services/chat-websocket';
 import { Lead, leadsAPI } from '../../services/leads';
+import { companyAPI } from '../../services/user';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface LeadCardProps {
   lead: Lead;
   onConsumeSuccess?: () => void;
+  remainingLeads?: number; // Pass from parent to avoid refetching
 }
 
 // Gradient Icon Components
@@ -597,7 +660,6 @@ const formatTimeAgo = (dateString: string): string => {
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays}d ago`;
   
-  // For older dates, show formatted date
   const options: Intl.DateTimeFormatOptions = { 
     month: 'short', 
     day: 'numeric',
@@ -606,17 +668,37 @@ const formatTimeAgo = (dateString: string): string => {
   return past.toLocaleDateString('en-US', options);
 };
 
-export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
+export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemainingLeads }: LeadCardProps) => {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [imageZoomed, setImageZoomed] = useState(false);
   const [showConsumeModal, setShowConsumeModal] = useState(false);
+  const [showReferralModal, setShowReferralModal] = useState(false);
   const [isConsuming, setIsConsuming] = useState(false);
+  const [remainingLeads, setRemainingLeads] = useState<number | null>(propRemainingLeads ?? null);
+  const [referralCode, setReferralCode] = useState<string>('');
   
   const { width: screenWidth } = useWindowDimensions();
-  
-  // Calculate responsive dimensions
   const cardWidth = Math.min(screenWidth - 32, 400);
+
+  // Fetch remaining leads if not provided
+  useEffect(() => {
+    if (propRemainingLeads === undefined) {
+      fetchQuota();
+    }
+  }, [propRemainingLeads]);
+
+  const fetchQuota = async () => {
+    try {
+      const quotaResponse = await companyAPI.getLeadQuota();
+      if (quotaResponse.status === 'success') {
+        setRemainingLeads(quotaResponse.data.remainingLeads);
+        setReferralCode(quotaResponse.data.referralCode);
+      }
+    } catch (error) {
+      console.error('Error fetching quota:', error);
+    }
+  };
 
   // --- Generate Deep Link ---
   const generateLeadLink = () => {
@@ -646,7 +728,14 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
 
   // --- Chat/Consume Logic ---
   const handleChatPress = () => {
-    setShowConsumeModal(true);
+    // Check if user has remaining leads
+    if (remainingLeads !== null && remainingLeads <= 0) {
+      // Show referral modal instead of consume modal
+      setShowReferralModal(true);
+    } else {
+      // Show consume confirmation modal
+      setShowConsumeModal(true);
+    }
   };
 
   const confirmConsumption = async () => {
@@ -657,6 +746,15 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
 
       if (consumeResponse.status === 'success') {
         
+        // Check if consumption was actually successful
+        if (consumeResponse.data?.message === 'Insufficient leads to consume') {
+          // User ran out of leads
+          setIsConsuming(false);
+          setShowConsumeModal(false);
+          setShowReferralModal(true);
+          return;
+        }
+
         if (onConsumeSuccess) {
           onConsumeSuccess();
         }
@@ -684,8 +782,32 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
     } catch (error: any) {
       setIsConsuming(false);
       setShowConsumeModal(false);
+      
       const msg = error.message || 'Failed to consume lead. Please check your quota.';
-      Alert.alert('Error', msg);
+      
+      // If error message indicates insufficient leads, show referral modal
+      if (msg.toLowerCase().includes('insufficient') || msg.toLowerCase().includes('quota')) {
+        setShowReferralModal(true);
+      } else {
+        Alert.alert('Error', msg);
+      }
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (referralCode) {
+      const link = `https://bizzap.app/signup?ref=${referralCode}`;
+      await Clipboard.setStringAsync(link);
+      Alert.alert('Success', 'Referral link copied to clipboard!');
+    }
+  };
+
+  const handleShareLink = async () => {
+    if (referralCode) {
+      const link = `https://bizzap.app/signup?ref=${referralCode}`;
+      await Share.share({ 
+        message: `Join Bizzap and get bonus leads! Code: ${referralCode}\n${link}` 
+      });
     }
   };
 
@@ -759,7 +881,9 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
             onPress={handleChatPress}
             activeOpacity={0.8}
           >
-            <Text style={styles.chatText}>Chat with Buyer</Text>
+            <Text style={styles.chatText}>
+              {remainingLeads !== null && remainingLeads <= 0 ? 'Get More Leads' : 'Chat with Buyer'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -830,6 +954,51 @@ export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
                     </TouchableOpacity>
                 </View>
             </View>
+        </View>
+      </Modal>
+
+      {/* Referral Modal (No Leads Left) */}
+      <Modal
+        visible={showReferralModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowReferralModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.referralCard}>
+            <TouchableOpacity 
+              style={styles.closeButton2} 
+              onPress={() => setShowReferralModal(false)}
+            >
+              <X size={24} color="#94A3B8" />
+            </TouchableOpacity>
+            
+            <View style={styles.giftIconCircle}>
+              <Gift size={40} color="#0057D9" />
+            </View>
+            
+            <Text style={styles.modalTitle}>Out of Lead Credits!</Text>
+            
+            <Text style={styles.modalDesc}>
+              You've used all your leads for this month. Invite friends to join Bizzap and earn <Text style={styles.highlightText}>3 bonus leads</Text> per successful referral!
+            </Text>
+            
+            {referralCode && (
+              <View style={styles.codeContainer}>
+                <Text style={styles.codeLabel}>Your Referral Code</Text>
+                <Text style={styles.codeValue}>{referralCode}</Text>
+              </View>
+            )}
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.btnCopy} onPress={handleCopyLink}>
+                <Text style={styles.btnCopyText}>Copy Link</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnShare} onPress={handleShareLink}>
+                <Text style={styles.btnShareText}>Share</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </>
@@ -978,6 +1147,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 24,
   },
+  closeButton2: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 8,
+  },
   zoomedImage: {
     width: '100%',
     height: SCREEN_HEIGHT * 0.8,
@@ -1053,6 +1228,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnConfirmText: {
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  // Referral Modal Styles
+  referralCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#30363D',
+  },
+  giftIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0, 87, 217, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 12,
+    fontFamily: 'Outfit',
+  },
+  modalDesc: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  codeContainer: {
+    width: '100%',
+    backgroundColor: '#0F1417',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#495565',
+  },
+  codeLabel: {
+    fontSize: 12,
+    color: '#8B949E',
+    marginBottom: 8,
+  },
+  codeValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#00D1B2',
+    letterSpacing: 2,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  btnCopy: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0057D9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnCopyText: {
+    color: '#0057D9',
+    fontWeight: '600',
+  },
+  btnShare: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#0057D9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnShareText: {
     color: '#FFF',
     fontWeight: '600',
   },

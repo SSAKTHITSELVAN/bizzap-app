@@ -12,11 +12,12 @@ import {
   ActivityIndicator,
   Dimensions,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { searchAPI, Company, Lead, PaginatedResult } from '../../../services/search';
-import { followersAPI } from '../../../services/user';
 import { useRouter } from 'expo-router';
 import { LeadCard } from '../../../components/cards/lead-card';
 
@@ -72,6 +73,8 @@ const CompanyResultCard = ({ company, onFollowChange }: CompanyResultCardProps) 
 // --- Main Search Screen Component ---
 export default function SearchScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{
     companies: PaginatedResult<Company>;
@@ -122,7 +125,7 @@ export default function SearchScreen() {
     }
   };
 
-  const handleCancelSearch = () => {
+  const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults(null);
     setIsSearching(false);
@@ -211,12 +214,15 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Search Bar */}
-      <View style={styles.searchBarContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
+      
+      {/* Search Bar with Dynamic Padding */}
+      <View style={[styles.searchBarContainer, { paddingTop: Math.max(insets.top, 20) + sizeScale(10) }]}>
         <LinearGradient
           colors={['#003E9C', '#01BE8B']}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
+          // Updated: Top to Bottom Gradient
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
           style={styles.gradientBorder}
         >
           <View style={styles.searchInputWrapper}>
@@ -231,18 +237,14 @@ export default function SearchScreen() {
               autoCorrect={false}
               returnKeyType="search"
             />
+            {/* Only the Cross Icon remains, 'Cancel' button removed */}
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
                 <Ionicons name="close-circle" size={sizeScale(20)} color="#666" />
               </TouchableOpacity>
             )}
           </View>
         </LinearGradient>
-        {isSearching && (
-          <TouchableOpacity onPress={handleCancelSearch}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Content */}
@@ -294,7 +296,7 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000', // Changed to black like dashboard
+    backgroundColor: '#000000',
   },
   
   // Search Bar
@@ -302,10 +304,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: sizeScale(16),
-    paddingTop: sizeScale(60),
     paddingBottom: sizeScale(12),
     gap: sizeScale(12),
-    backgroundColor: '#121924', // Keep header with original color
+    backgroundColor: '#121924',
   },
   gradientBorder: {
     flex: 1,
@@ -331,18 +332,14 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: sizeScale(2),
   },
-  cancelText: {
-    fontSize: sizeScale(16),
-    color: '#fff',
-    fontWeight: '500',
-  },
+  // cancelText style removed as button is removed
 
   // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000', // Black background
+    backgroundColor: '#000000',
   },
   loadingText: {
     marginTop: sizeScale(12),
@@ -355,7 +352,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 0.5,
     borderBottomColor: '#2a2a2a',
-    backgroundColor: '#000000', // Black background
+    backgroundColor: '#000000',
   },
   tab: {
     flex: 1,
@@ -380,7 +377,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000', // Black background
+    backgroundColor: '#000000',
   },
   emptySearchState: {
     alignItems: 'center',
@@ -403,13 +400,13 @@ const styles = StyleSheet.create({
   // Results Container
   resultsContainer: {
     paddingBottom: sizeScale(100),
-    backgroundColor: '#121924', // Keep accounts tab with original color
+    backgroundColor: '#121924',
   },
   leadsResultsContainer: {
     paddingHorizontal: sizeScale(16),
     paddingTop: sizeScale(12),
     paddingBottom: sizeScale(100),
-    backgroundColor: '#000000', // Black background for leads
+    backgroundColor: '#000000',
   },
 
   // Company Result Card
@@ -419,7 +416,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: sizeScale(16),
     paddingVertical: sizeScale(10),
     gap: sizeScale(10),
-    backgroundColor: '#121924', // Keep company cards with original color
+    backgroundColor: '#121924',
     borderBottomWidth: 0.5,
     borderBottomColor: '#2a2a2a',
   },
@@ -446,38 +443,14 @@ const styles = StyleSheet.create({
     fontSize: sizeScale(12),
     color: '#8FA8CC',
   },
-  followButton: {
-    paddingHorizontal: sizeScale(24),
-    paddingVertical: sizeScale(6),
-    backgroundColor: '#01BE8B',
-    borderRadius: sizeScale(6),
-    minWidth: sizeScale(90),
-    alignItems: 'center',
-  },
-  followingButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  followButtonDisabled: {
-    opacity: 0.6,
-  },
-  followButtonText: {
-    fontSize: sizeScale(14),
-    fontWeight: '600',
-    color: '#fff',
-  },
-  followingButtonText: {
-    color: '#999',
-  },
-
+  
   // Empty Results
   emptyResults: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: sizeScale(80),
-    backgroundColor: '#000000', // Black background
+    backgroundColor: '#000000',
   },
   emptyText: {
     fontSize: sizeScale(16),

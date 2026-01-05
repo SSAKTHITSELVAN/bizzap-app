@@ -1,27 +1,26 @@
 // app/(auth)/complete-profile.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet,
-  ScrollView, 
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import {
   ActivityIndicator,
   Alert,
   BackHandler,
-  Platform,
-  StatusBar,
   KeyboardAvoidingView,
-  Keyboard
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
-import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { GSTData, formatGSTAddress, getCompanyNameFromGST, getUserNameFromGST } from '../../services/gstVerification';
 
 interface ImageAsset {
@@ -48,6 +47,7 @@ const CompleteProfilePage = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { register } = useAuth();
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   
   // --- State ---
@@ -74,7 +74,6 @@ const CompleteProfilePage = () => {
 
   // --- Effects ---
 
-  // 1. Data Parsing & Auto-fill
   useEffect(() => {
     if (!phoneNumber || !otp || !paramGstNumber) {
       console.error('Missing required params');
@@ -89,7 +88,6 @@ const CompleteProfilePage = () => {
         const companyName = getCompanyNameFromGST(gstData);
         const userName = getUserNameFromGST(gstData);
         const address = formatGSTAddress(gstData);
-        
         const panNumber = paramGstNumber.substring(2, 12);
 
         setFormData(prev => ({
@@ -108,10 +106,9 @@ const CompleteProfilePage = () => {
     }
   }, [phoneNumber, otp, paramGstNumber, gstDataString]);
 
-  // 2. Hardware Back Button
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleEditGST(); 
+      handleEditGST();
       return true;
     });
     return () => backHandler.remove();
@@ -154,12 +151,12 @@ const CompleteProfilePage = () => {
   };
 
   const handleSubmit = async () => {
-    // 1. Mandatory Image Check
+    // Mandatory Image Check
     if (!formData.logo) {
         Alert.alert(
             "Profile Picture Required", 
             "Please upload a business logo or profile picture to continue.",
-            [{ text: "OK", onPress: pickImage }]
+            [{ text: "Select Image", onPress: pickImage }]
         );
         return;
     }
@@ -182,9 +179,7 @@ const CompleteProfilePage = () => {
         category: formData.category
       };
 
-      console.log('📤 Submitting Registration');
       await register(registrationData);
-      
       router.replace('/');
       
     } catch (err: any) {
@@ -195,11 +190,11 @@ const CompleteProfilePage = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0E11" />
       
-      {/* Header */}
-      <View style={styles.topBar}>
+      {/* Header with Dynamic Safe Area Padding */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 20) }]}>
           <TouchableOpacity onPress={handleEditGST} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -210,143 +205,126 @@ const CompleteProfilePage = () => {
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
-        keyboardVerticalOffset={Platform.OS === 'android' ? 20 : 0}
       >
         <ScrollView 
             ref={scrollViewRef}
-            contentContainerStyle={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
         >
             {/* Profile Image Section */}
             <View style={styles.profileSection}>
-            <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
-                {formData.logo ? (
-                <Image 
-                    source={{ uri: formData.logo.uri }} 
-                    style={styles.avatar}
-                    contentFit="cover"
-                />
-                ) : (
-                <View style={styles.placeholderAvatar}>
-                    <Ionicons name="business" size={40} color="#FFFFFF" />
-                </View>
-                )}
-                {/* Blue Glow Effect Border */}
-                <View style={styles.avatarBorder} />
-                <View style={styles.editIconBadge}>
-                    <Ionicons name="camera" size={14} color="#FFF" />
-                </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity onPress={pickImage}>
-                <Text style={styles.changeProfileText}>Change Profile *</Text>
-            </TouchableOpacity>
+              <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
+                  {formData.logo ? (
+                  <Image 
+                      source={{ uri: formData.logo.uri }} 
+                      style={styles.avatar}
+                      contentFit="cover"
+                  />
+                  ) : (
+                  <View style={styles.placeholderAvatar}>
+                      <Ionicons name="business" size={40} color="#FFFFFF" />
+                  </View>
+                  )}
+                  <View style={styles.avatarBorder} />
+                  <View style={styles.editIconBadge}>
+                      <Ionicons name="camera" size={14} color="#FFF" />
+                  </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={pickImage}>
+                  <Text style={styles.changeProfileText}>Change Profile *</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Info Card Section */}
             <View style={styles.card}>
-            
-            {/* Company Name */}
-            <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Company Name</Text>
-                <Text style={styles.valueText}>{formData.companyName || 'Loading...'}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* GST Number */}
-            <View style={styles.row}>
-                <Text style={styles.label}>GST Number</Text>
-                <Text style={styles.valueTextRight}>{formData.gstNumber}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* PAN Number */}
-            <View style={styles.row}>
-                <Text style={styles.label}>PAN</Text>
-                <Text style={styles.valueTextRight}>{formData.pan || 'N/A'}</Text>
-            </View>
-            
-            <View style={styles.divider} />
-
-            {/* Address */}
-            <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Address</Text>
-                <Text style={styles.valueText} numberOfLines={2}>
-                {formData.address || 'Loading address...'}
-                </Text>
-            </View>
-
+              <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Company Name</Text>
+                  <Text style={styles.valueText}>{formData.companyName || 'Loading...'}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                  <Text style={styles.label}>GST Number</Text>
+                  <Text style={styles.valueTextRight}>{formData.gstNumber}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                  <Text style={styles.label}>PAN</Text>
+                  <Text style={styles.valueTextRight}>{formData.pan || 'N/A'}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Address</Text>
+                  <Text style={styles.valueText} numberOfLines={2}>
+                  {formData.address || 'Loading address...'}
+                  </Text>
+              </View>
             </View>
 
             {/* Referral Input */}
             <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Referral Code (Optional)</Text>
-            <TextInput
-                style={styles.input}
-                value={formData.referredBy}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, referredBy: text }))}
-                placeholder="Enter code"
-                placeholderTextColor="#6B7280"
-                autoCapitalize="characters"
-                editable={!loading}
-                onFocus={() => {
-                    // Scroll to bottom when focused so keyboard doesn't hide it
-                    setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                    }, 100);
-                }}
-            />
+              <Text style={styles.inputLabel}>Referral Code (Optional)</Text>
+              <TextInput
+                  style={styles.input}
+                  value={formData.referredBy}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, referredBy: text }))}
+                  placeholder="Enter code"
+                  placeholderTextColor="#6B7280"
+                  autoCapitalize="characters"
+                  editable={!loading}
+                  onFocus={() => {
+                      setTimeout(() => {
+                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 100);
+                  }}
+              />
             </View>
-
         </ScrollView>
 
-        {/* Footer Actions */}
-        <View style={styles.footer}>
+        {/* Footer Actions - Inside KeyboardAvoidingView to push up */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-            activeOpacity={0.8}
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+              activeOpacity={0.8}
             >
-            {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-            ) : (
-                <Text style={styles.buttonText}>Confirm & Finish</Text>
-            )}
+              {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                  <Text style={styles.buttonText}>Confirm & Finish</Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleEditGST} style={styles.linkContainer}>
-            <Text style={styles.footerLinkText}>
-                Not your company? <Text style={styles.linkHighlight}>Edit GST number</Text>
-            </Text>
+              <Text style={styles.footerLinkText}>
+                  Not your company? <Text style={styles.linkHighlight}>Edit GST number</Text>
+              </Text>
             </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 export default CompleteProfilePage;
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#0B0E11',
   },
   keyboardContainer: {
     flex: 1,
   },
-  
-  // Header
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingBottom: 10,
+    backgroundColor: '#0B0E11',
   },
   backButton: {
     padding: 4,
@@ -356,17 +334,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-
-  scrollContainer: {
+  scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
-    flexGrow: 1, // Ensures content can scroll if needed
+    flexGrow: 1,
   },
-
-  // Profile Section
   profileSection: {
     alignItems: 'center',
-    marginVertical: 30,
+    marginVertical: 20,
   },
   avatarContainer: {
     width: 100,
@@ -396,7 +371,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 1.5,
-    borderColor: '#3B82F6', // Blue glow ring
+    borderColor: '#3B82F6',
     opacity: 0.6,
     zIndex: 1,
   },
@@ -419,54 +394,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-
-  // Info Card
   card: {
     backgroundColor: '#16191D',
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
   },
-  fieldGroup: {
-    marginBottom: 10,
-  },
+  fieldGroup: { marginBottom: 10 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  label: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginBottom: 4,
-  },
-  valueText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  valueTextRight: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#2D333B',
-    marginVertical: 12,
-  },
-
-  // Referral Input
-  inputContainer: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: '#E5E7EB',
-    marginBottom: 8,
-    marginLeft: 4
-  },
+  label: { fontSize: 13, color: '#9CA3AF', marginBottom: 4 },
+  valueText: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
+  valueTextRight: { fontSize: 15, color: '#FFFFFF', fontWeight: '500' },
+  divider: { height: 1, backgroundColor: '#2D333B', marginVertical: 12 },
+  inputContainer: { marginBottom: 20 },
+  inputLabel: { fontSize: 14, color: '#E5E7EB', marginBottom: 8, marginLeft: 4 },
   input: {
     height: 54,
     backgroundColor: '#16191D',
@@ -477,8 +423,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2D333B',
   },
-
-  // Footer
   footer: {
     padding: 20,
     backgroundColor: '#0B0E11',
@@ -494,23 +438,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  linkContainer: {
-    alignItems: 'center',
-  },
-  footerLinkText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-  },
-  linkHighlight: {
-    color: '#3B82F6',
-    fontWeight: '500',
-  },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  linkContainer: { alignItems: 'center' },
+  footerLinkText: { color: '#9CA3AF', fontSize: 13 },
+  linkHighlight: { color: '#3B82F6', fontWeight: '500' },
 });

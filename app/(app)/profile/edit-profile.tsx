@@ -15,6 +15,7 @@ import {
     Platform,
     Animated,
     StatusBar,
+    Linking
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Config } from '../../../constants/config';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STANDARD_WIDTH = 390;
@@ -66,7 +68,7 @@ const SuccessToast: React.FC<ToastProps> = ({ message, visible, onDismiss }) => 
         }
     }, [visible, fadeAnim, onDismiss]);
 
-    if (!visible && fadeAnim.readAndClearForced() === 0 && !visible) return null;
+    if (!visible) return null;
 
     return (
         <Animated.View style={[styles.toastContainer, { opacity: fadeAnim }]} pointerEvents="none">
@@ -81,26 +83,43 @@ const SuccessToast: React.FC<ToastProps> = ({ message, visible, onDismiss }) => 
 export default function EditProfileScreen() {
     const router = useRouter();
     const { user, refreshUser } = useAuth();
+    const insets = useSafeAreaInsets();
     
     const [loading, setLoading] = useState(false);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     
-    // Editable States
+    // --- Editable Fields ---
     const [userName, setUserName] = useState(user?.userName || '');
     const [description, setDescription] = useState(user?.description || '');
     const [about, setAbout] = useState(user?.about || '');
     const [category, setCategory] = useState(user?.category || '');
+    const [registeredAddress, setRegisteredAddress] = useState(user?.registeredAddress || '');
+    const [operationalAddress, setOperationalAddress] = useState(user?.operationalAddress || '');
     
-    // Fixed/Read-only States (Verified via GST)
+    // Fixed/Read-only States
     const companyName = user?.companyName || '';
     const address = user?.address || '';
-    const registeredAddress = user?.registeredAddress || '';
-    const operationalAddress = user?.operationalAddress || '';
     
+    // Images
     const [userPhoto, setUserPhoto] = useState<MediaFile | null>(null);
     const [logo, setLogo] = useState<MediaFile | null>(null);
     const [coverImage, setCoverImage] = useState<MediaFile | null>(null);
+
+    useEffect(() => {
+        if (user) {
+            setUserName(user.userName || '');
+            setDescription(user.description || '');
+            setAbout(user.about || '');
+            setCategory(user.category || '');
+            setRegisteredAddress(user.registeredAddress || '');
+            setOperationalAddress(user.operationalAddress || '');
+        }
+    }, [user]);
+
+    const handleSupportClick = () => {
+        Linking.openURL('http://bizzap.app/support').catch(err => console.error("Couldn't load page", err));
+    };
 
     const handleSave = async () => {
         if (!userName.trim()) {
@@ -117,8 +136,9 @@ export default function EditProfileScreen() {
             formData.append('description', description.trim());
             formData.append('about', about.trim());
             formData.append('category', category.trim());
+            formData.append('registeredAddress', registeredAddress.trim());
+            formData.append('operationalAddress', operationalAddress.trim());
 
-            // Handle Images
             const appendImage = (key: string, data: MediaFile | null) => {
                 if (data) {
                     if (Platform.OS === 'web' && data.file) {
@@ -126,8 +146,6 @@ export default function EditProfileScreen() {
                     } else {
                         formData.append(key, { uri: data.uri, type: data.type, name: data.name } as any);
                     }
-                } else {
-                    formData.append(key, '');
                 }
             };
 
@@ -146,6 +164,7 @@ export default function EditProfileScreen() {
                 setTimeout(() => router.back(), 2500);
             }
         } catch (error: any) {
+            console.error(error);
             Alert.alert('Error', error.response?.data?.message || 'Update failed.');
         } finally {
             setLoading(false);
@@ -178,10 +197,10 @@ export default function EditProfileScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + 10 }]}>
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Feather name="arrow-left" size={sizeScale(24)} color="#fff" />
                 </TouchableOpacity>
@@ -197,11 +216,15 @@ export default function EditProfileScreen() {
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 
-                {/* Verified Info Notice */}
+                {/* Info Banner */}
                 <View style={styles.infoBanner}>
                     <MaterialCommunityIcons name="shield-check" size={sizeScale(20)} color="#10B981" />
                     <Text style={styles.infoBannerText}>
-                        Verified business details cannot be edited. Contact <Text style={styles.brandText}>Bizzap Support</Text> to request changes.
+                        Verified business details cannot be edited. Contact{' '}
+                        <Text style={styles.brandText} onPress={handleSupportClick}>
+                            Bizzap Support
+                        </Text>{' '}
+                        to request changes.
                     </Text>
                 </View>
 
@@ -209,7 +232,11 @@ export default function EditProfileScreen() {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Profile Branding</Text>
                     <TouchableOpacity style={styles.coverImageContainer} onPress={() => handlePickImage('coverImage')}>
-                        <Image source={{ uri: coverImage?.uri || user?.coverImage || PLACEHOLDER_IMG }} style={styles.coverImage} />
+                        {/* Use user.coverImage (from local storage) if no new image selected */}
+                        <Image 
+                            source={{ uri: coverImage?.uri || user?.coverImage || PLACEHOLDER_IMG }} 
+                            style={styles.coverImage} 
+                        />
                         <View style={styles.cameraOverlay}><Feather name="camera" size={20} color="#fff" /></View>
                     </TouchableOpacity>
 
@@ -217,14 +244,20 @@ export default function EditProfileScreen() {
                         <View style={styles.imageBox}>
                             <Text style={styles.imageLabel}>Your Photo</Text>
                             <TouchableOpacity style={styles.imageContainer} onPress={() => handlePickImage('userPhoto')}>
-                                <Image source={{ uri: userPhoto?.uri || user?.userPhoto || PLACEHOLDER_IMG }} style={styles.profileImage} />
+                                <Image 
+                                    source={{ uri: userPhoto?.uri || user?.userPhoto || PLACEHOLDER_IMG }} 
+                                    style={styles.profileImage} 
+                                />
                                 <View style={styles.cameraOverlay}><Feather name="camera" size={16} color="#fff" /></View>
                             </TouchableOpacity>
                         </View>
                         <View style={styles.imageBox}>
                             <Text style={styles.imageLabel}>Business Logo</Text>
                             <TouchableOpacity style={styles.imageContainer} onPress={() => handlePickImage('logo')}>
-                                <Image source={{ uri: logo?.uri || user?.logo || PLACEHOLDER_IMG }} style={styles.profileImage} />
+                                <Image 
+                                    source={{ uri: logo?.uri || user?.logo || PLACEHOLDER_IMG }} 
+                                    style={styles.profileImage} 
+                                />
                                 <View style={styles.cameraOverlay}><Feather name="camera" size={16} color="#fff" /></View>
                             </TouchableOpacity>
                         </View>
@@ -235,7 +268,6 @@ export default function EditProfileScreen() {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Basic Information</Text>
                     
-                    {/* Read-only Company Name */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Company Name (Verified)</Text>
                         <View style={styles.readOnlyInput}>
@@ -274,33 +306,44 @@ export default function EditProfileScreen() {
                     />
                 </View>
 
-                {/* Read-only Address Section */}
+                {/* Address Section - Editable */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Verified Addresses</Text>
+                    <Text style={styles.sectionTitle}>Addresses</Text>
                     
                     <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Business Address</Text>
+                        <Text style={styles.inputLabel}>Business Address (Verified)</Text>
                         <View style={[styles.readOnlyInput, styles.multiLineReadOnly]}>
                             <Text style={styles.readOnlyText}>{address || 'Not Provided'}</Text>
+                            <Feather name="lock" size={14} color="#666" />
                         </View>
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Registered Address</Text>
-                        <View style={[styles.readOnlyInput, styles.multiLineReadOnly]}>
-                            <Text style={styles.readOnlyText}>{registeredAddress || 'Not Provided'}</Text>
-                        </View>
+                        <TextInput 
+                            style={[styles.input, styles.textArea]} 
+                            value={registeredAddress} 
+                            onChangeText={setRegisteredAddress}
+                            placeholder="Enter registered address"
+                            placeholderTextColor="#666"
+                            multiline
+                        />
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Operational Address</Text>
-                        <View style={[styles.readOnlyInput, styles.multiLineReadOnly]}>
-                            <Text style={styles.readOnlyText}>{operationalAddress || 'Not Provided'}</Text>
-                        </View>
+                        <TextInput 
+                            style={[styles.input, styles.textArea]} 
+                            value={operationalAddress} 
+                            onChangeText={setOperationalAddress}
+                            placeholder="Enter operational address"
+                            placeholderTextColor="#666"
+                            multiline
+                        />
                     </View>
                 </View>
 
-                <View style={styles.bottomPadding} />
+                <View style={[styles.bottomPadding, { height: insets.bottom + 80 }]} />
             </ScrollView>
 
             <SuccessToast message={successMessage} visible={showSuccessToast} onDismiss={() => setShowSuccessToast(false)} />
@@ -316,7 +359,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: sizeScale(16),
         paddingVertical: sizeScale(12),
-        paddingTop: Platform.OS === 'ios' ? sizeScale(50) : sizeScale(20),
         backgroundColor: '#000',
         borderBottomWidth: 1,
         borderBottomColor: '#1a1a1a',
@@ -337,7 +379,7 @@ const styles = StyleSheet.create({
         gap: sizeScale(10),
     },
     infoBannerText: { flex: 1, fontSize: sizeScale(12), color: '#D1FAE5', lineHeight: sizeScale(18) },
-    brandText: { fontWeight: '700', color: '#10B981' },
+    brandText: { fontWeight: '700', color: '#10B981', textDecorationLine: 'underline' },
     section: { padding: sizeScale(16), borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
     sectionTitle: { fontSize: sizeScale(16), fontWeight: '700', color: '#fff', marginBottom: sizeScale(16) },
     coverImageContainer: { width: '100%', height: sizeScale(160), borderRadius: sizeScale(12), overflow: 'hidden', backgroundColor: '#1a1a1a' },
@@ -365,7 +407,31 @@ const styles = StyleSheet.create({
     multiLineReadOnly: { minHeight: sizeScale(50) },
     textArea: { minHeight: sizeScale(100), textAlignVertical: 'top' },
     bottomPadding: { height: sizeScale(100) },
-    toastContainer: { position: 'absolute', bottom: sizeScale(50), left: 0, right: 0, alignItems: 'center', zIndex: 100 },
-    toastContent: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#059669', paddingVertical: sizeScale(12), paddingHorizontal: sizeScale(20), borderRadius: sizeScale(30), gap: sizeScale(8) },
+    
+    // Updated Toast Container to Center on Screen
+    toastContainer: { 
+        position: 'absolute', 
+        top: 0, 
+        bottom: 0, 
+        left: 0, 
+        right: 0, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        zIndex: 100 
+    },
+    toastContent: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#059669', 
+        paddingVertical: sizeScale(12), 
+        paddingHorizontal: sizeScale(24), 
+        borderRadius: sizeScale(30), 
+        gap: sizeScale(8),
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
     toastText: { color: '#fff', fontSize: sizeScale(14), fontWeight: '600' },
 });

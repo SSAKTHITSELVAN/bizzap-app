@@ -1,25 +1,26 @@
 // app/(auth)/gst-entry.tsx
-import React, { useState, useEffect } from 'react';
+
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet,
-  SafeAreaView,
+  ActivityIndicator,
+  BackHandler,
+  Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  BackHandler,
-  ActivityIndicator,
-  Alert,
+  ScrollView,
   StatusBar,
-  Keyboard,
-  Dimensions
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View 
 } from 'react-native';
-import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { verifyGSTNumber } from '../../services/gstVerification';
-import { Ionicons } from '@expo/vector-icons';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ const GstEntryPage = () => {
   
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const phoneNumber = params.phoneNumber as string;
   const otp = params.otp as string;
 
@@ -44,15 +46,11 @@ const GstEntryPage = () => {
     return () => backHandler.remove();
   }, []);
 
-  // Regex to validate GST Format
   const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}[A-Z]{1}[A-Z0-9]{1}$/;
 
   const handleGstChange = (text: string) => {
-    // Force uppercase
     const upperText = text.toUpperCase();
     setGstNumber(upperText);
-    
-    // Clear error if user starts typing
     if (error) setError('');
   };
 
@@ -60,16 +58,8 @@ const GstEntryPage = () => {
     setError('');
     Keyboard.dismiss();
     
-    // Double check before API call (though button is disabled otherwise)
-    if (!gstNumber.trim()) {
-      setError('GST Number is required');
-      return;
-    }
-    
-    if (!gstRegex.test(gstNumber)) {
-      setError('Please enter a valid 15-digit GST number');
-      return;
-    }
+    if (!gstNumber.trim()) return setError('GST Number is required');
+    if (!gstRegex.test(gstNumber)) return setError('Please enter a valid 15-digit GST number');
 
     setLoading(true);
     try {
@@ -103,26 +93,31 @@ const GstEntryPage = () => {
     }
   };
 
-  // Check validity for button state
   const isValidGst = gstRegex.test(gstNumber);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <View style={styles.topBar}>
+      {/* Header */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 20) }]}>
           <TouchableOpacity onPress={() => router.replace('/(auth)/phone-entry')} style={styles.backButton}>
              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>GST Number</Text>
           <View style={{ width: 24 }} /> 
-        </View>
+      </View>
 
-        <View style={styles.contentContainer}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardContainer}
+      >
+        {/* Scrollable Content to prevent overlap on small screens */}
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.logoContainer}>
              <Image 
                source={{ uri: "https://image2url.com/images/1765428960732-cd2e3e5e-9d7f-44b8-a152-7d8b71d21f75.png" }}
@@ -158,17 +153,16 @@ const GstEntryPage = () => {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
-        </View>
+        </ScrollView>
 
-        <View style={styles.footer}>
+        {/* Footer sticks to bottom (or top of keyboard) */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <TouchableOpacity
             style={[
               styles.button, 
-              // Disable visual style if loading OR invalid regex
               (loading || !isValidGst) && styles.buttonDisabled
             ]}
             onPress={handleFetchDetails}
-            // Disable interaction if loading OR invalid regex
             disabled={loading || !isValidGst}
           >
             {loading ? (
@@ -179,19 +173,18 @@ const GstEntryPage = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 export default GstEntryPage;
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#0B0E11',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  container: {
+  keyboardContainer: {
     flex: 1,
   },
   topBar: {
@@ -199,19 +192,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: 56,
+    paddingBottom: 10,
+    backgroundColor: '#0B0E11',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  contentContainer: {
-    flex: 1,
+  scrollContent: {
     paddingHorizontal: 24,
+    paddingBottom: 20,
+    flexGrow: 1,
+    justifyContent: 'center', // Centers content vertically if space allows
   },
   logoContainer: {
-    height: SCREEN_HEIGHT * 0.2,
+    height: SCREEN_HEIGHT * 0.2, // Responsive height
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 20,
@@ -251,9 +247,10 @@ const styles = StyleSheet.create({
   inputError: { borderColor: '#EF4444' },
   errorContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   errorText: { color: '#EF4444', fontSize: 13 },
+  
   footer: {
     padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    backgroundColor: '#0B0E11',
   },
   button: {
     backgroundColor: '#005CE6',
@@ -264,7 +261,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { 
     opacity: 0.5, 
-    backgroundColor: '#1E293B' // Darker/Greyed out color
+    backgroundColor: '#1E293B' 
   },
   buttonText: { 
     color: '#FFFFFF', 

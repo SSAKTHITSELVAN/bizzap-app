@@ -17,9 +17,10 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
+    StatusBar // Added StatusBar
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // Added useSafeAreaInsets
 import { LeadCard } from '../../../components/cards/lead-card';
 import { Lead, leadsAPI } from '../../../services/leads';
 import { companyAPI, LeadQuotaData } from '../../../services/user';
@@ -31,6 +32,7 @@ const sizeScale = (size: number) => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
 export default function DashboardScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets(); // Hook for dynamic padding
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotaData, setQuotaData] = useState<LeadQuotaData | null>(null);
@@ -72,7 +74,6 @@ export default function DashboardScreen() {
   };
 
   useEffect(() => {
-    // Only fetch once on component mount
     if (!hasInitialFetchRef.current) {
       hasInitialFetchRef.current = true;
       fetchData();
@@ -128,11 +129,9 @@ export default function DashboardScreen() {
   // --- Render Components ---
 
   const renderHeader = () => {
-    // Header Data
     const displayImage = userProfile?.userPhoto || userProfile?.logo;
     const displayInitial = (userProfile?.userName || userProfile?.companyName || 'B').charAt(0).toUpperCase();
 
-    // Quota Data
     if (!quotaData) return <View style={{ height: sizeScale(20) }} />; 
 
     const { remainingLeads, totalLeadQuota, daysUntilReset } = quotaData;
@@ -141,8 +140,11 @@ export default function DashboardScreen() {
 
     return (
       <View>
-        {/* Scrollable Nav Bar (Header) - Updated with Bottom Padding & Margin */}
-        <View style={styles.navRow}>
+        {/* Scrollable Nav Bar (Header) - Dynamic Top Padding */}
+        <View style={[
+            styles.navRow, 
+            { paddingTop: Math.max(insets.top, 20) + sizeScale(12) }
+        ]}>
             <Text style={styles.navTitle}>Leads</Text>
             <TouchableOpacity 
                 style={styles.profileContainer}
@@ -162,7 +164,6 @@ export default function DashboardScreen() {
         <View style={styles.headerArea}>
           <View style={styles.quotaCard}>
             
-            {/* Top Row: Usage & Expiry */}
             <View style={styles.quotaRow}>
               <Text style={styles.quotaText}>
                 <Text style={styles.greenText}>{usedLeads}/{totalLeadQuota} leads used</Text>
@@ -172,7 +173,6 @@ export default function DashboardScreen() {
               </Text>
             </View>
 
-            {/* Progress Bar */}
             <View style={styles.progressTrack}>
               <View 
                 style={[
@@ -182,7 +182,6 @@ export default function DashboardScreen() {
               />
             </View>
 
-            {/* Conditional Warning Box */}
             {isLowQuota && (
               <View style={styles.warningBox}>
                 <View style={styles.warningRow}>
@@ -193,7 +192,6 @@ export default function DashboardScreen() {
               </View>
             )}
 
-            {/* Get More Leads Button */}
             <TouchableOpacity 
               style={styles.getMoreBtn}
               onPress={handleReferClick}
@@ -215,8 +213,11 @@ export default function DashboardScreen() {
     );
   }
 
+  // Use edges={['bottom', 'left', 'right']} to avoid clipping header at top
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
+      
       <FlatList
         ref={flatListRef}
         data={leads}
@@ -288,9 +289,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: sizeScale(16),
-    paddingTop: sizeScale(16),
-    paddingBottom: sizeScale(24), // Added Extra Bottom Padding for Header
-    marginBottom: sizeScale(16),  // Margin to separate Header from Card
+    // paddingTop removed here as it's set dynamically
+    paddingBottom: sizeScale(24), 
+    marginBottom: sizeScale(16),
     backgroundColor: '#121924',
   },
   navTitle: {
@@ -328,7 +329,7 @@ const styles = StyleSheet.create({
     width: '100%', 
     borderRadius: sizeScale(12), 
     padding: sizeScale(16), 
-    backgroundColor: '#111827', // Dark Card Background
+    backgroundColor: '#111827',
     borderWidth: 1,
     borderColor: '#1F2937',
   },
@@ -369,7 +370,7 @@ const styles = StyleSheet.create({
   
   // Warning Box
   warningBox: {
-    backgroundColor: 'rgba(69, 26, 3, 0.6)', // Dark brown/orange bg
+    backgroundColor: 'rgba(69, 26, 3, 0.6)',
     borderWidth: 1,
     borderColor: '#7C2D12',
     borderRadius: sizeScale(8),
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
     gap: sizeScale(8),
   },
   warningTitle: {
-    color: '#EA580C', // Orange text
+    color: '#EA580C', 
     fontSize: sizeScale(14),
     fontWeight: '600',
   },
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
   getMoreBtn: { 
     width: '100%',
     height: sizeScale(44), 
-    backgroundColor: '#EA580C', // Solid Orange
+    backgroundColor: '#EA580C',
     borderRadius: sizeScale(8), 
     justifyContent: 'center', 
     alignItems: 'center',
