@@ -1,5 +1,4 @@
 // app/(app)/chat/partner-profile/[companyId].tsx
-
 import React, { useState, useEffect } from 'react';
 import {
     View,
@@ -11,10 +10,12 @@ import {
     Image,
     StatusBar,
     Share,
-    ActivityIndicator
+    ActivityIndicator,
+    Platform
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { companyAPI } from '../../../../services/user';
 
 // --- Responsive Sizing Utility ---
@@ -22,19 +23,16 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STANDARD_WIDTH = 390;
 const sizeScale = (size: number): number => (SCREEN_WIDTH / STANDARD_WIDTH) * size;
 
-// --- Assets & Constants ---
+const DEFAULT_COVER = 'https://via.placeholder.com/390x200/000000/000000?text='; 
 const PLACEHOLDER_AVATAR = 'https://via.placeholder.com/150/1a1a1a/666?text=User';
-const PLACEHOLDER_COVER = 'https://via.placeholder.com/390x150/0F1115/333333?text=Cover';
 
-// Define Colors
 const COLORS = {
     bg: '#000000',
-    cardBg: '#0F1115',
-    iconColor: '#8FA8CC',
+    cardBg: '#0A0A0A',
+    cardBorder: '#1F1F1F',
     textWhite: '#FFFFFF',
-    textBlue: '#589AFD',
-    cardBorder: 'rgba(120, 120, 120, 0.2)',
-    glassBg: 'rgba(255, 255, 255, 0.04)',
+    textGrey: '#888888',
+    cyan: '#00E0FF', 
 };
 
 export default function PartnerProfileScreen() {
@@ -63,24 +61,39 @@ export default function PartnerProfileScreen() {
 
     const handleBack = () => router.back();
     
+    const generateProfileLink = () => {
+        if (!companyId) return 'https://bizzap.app';
+        return `https://bizzap.app/companies/${companyId}`;
+    };
+
     const handleShare = async () => {
         try {
+            const profileLink = generateProfileLink();
+            const name = profileData?.companyName || profileData?.userName || 'Profile';
+            
+            const shareMessage = `📱 Check out ${name} on Bizzap!\n\n` +
+                (profileData?.description ? `${profileData.description}\n\n` : '') +
+                (profileData?.address ? `📍 ${profileData.address}\n\n` : '') +
+                `View full profile: ${profileLink}`;
+
             await Share.share({
-                message: `Check out ${profileData?.companyName || 'this profile'} on Bizzap!`,
+                message: shareMessage,
+                title: `${name} - Bizzap Profile`,
+                url: profileLink,
             });
         } catch (error) {
-            console.error(error);
+            console.error('Share error:', error);
         }
     };
 
     // --- Image Logic ---
     const avatarImage = profileData?.logo || profileData?.userPhoto || PLACEHOLDER_AVATAR;
-    const coverImage = profileData?.coverImage || PLACEHOLDER_COVER;
+    const coverImageSource = profileData?.coverImage ? { uri: profileData.coverImage } : { uri: DEFAULT_COVER };
 
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0057D9" />
+                <ActivityIndicator size="large" color={COLORS.cyan} />
             </View>
         );
     }
@@ -95,269 +108,172 @@ export default function PartnerProfileScreen() {
                 showsVerticalScrollIndicator={false}
                 bounces={false}
             >
-                {/* --- 1. Top Section (Cover + Back Button) --- */}
-                <View style={styles.coverSection}>
-                    <Image 
-                        source={{ uri: coverImage }} 
-                        style={styles.coverImage} 
-                        resizeMode="cover" 
-                    />
-                    
-                    {/* Back Button */}
-                    <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
-                        <Feather name="chevron-left" size={sizeScale(28)} color="#fff" />
-                    </TouchableOpacity>
-                </View>
+                {/* --- HEADER SECTION --- */}
+                <View style={styles.headerContainer}>
+                    <View style={styles.horizonWrapper}>
+                        <Image source={coverImageSource} style={styles.coverImage} resizeMode="cover" />
+                        <LinearGradient
+                            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.8)', '#000000']}
+                            style={StyleSheet.absoluteFill}
+                        />
+                    </View>
 
-                {/* --- 2. Main Depth Frame (Profile Card) --- */}
-                <View style={styles.depthFrame}>
-                    <View style={styles.cardBackground}>
-                        
-                        {/* Share Icon Only (No Edit) */}
-                        <TouchableOpacity style={styles.iconShare} onPress={handleShare}>
-                            <Ionicons name="share-social-outline" size={sizeScale(22)} color="#fff" />
+                    {/* Navbar - Back Button */}
+                    <View style={styles.navbar}>
+                        <TouchableOpacity onPress={handleBack} style={styles.navButton}>
+                            <Feather name="chevron-left" size={sizeScale(28)} color="#fff" />
                         </TouchableOpacity>
+                    </View>
 
-                        {/* Avatar */}
-                        <View style={styles.avatarContainer}>
-                            <Image 
-                                source={{ uri: avatarImage }} 
-                                style={styles.avatar} 
-                                resizeMode="cover"
-                            />
+                    {/* Avatar & Floating Actions */}
+                    <View style={styles.avatarSection}>
+                        <View style={styles.avatarWrapper}>
+                            <Image source={{ uri: avatarImage }} style={styles.avatar} />
                         </View>
-
-                        {/* Spacer where "Change Profile" used to be */}
-                        <View style={{ height: sizeScale(16) }} />
-
-                        {/* Info Glass Box */}
-                        <View style={styles.glassInfoBox}>
-                            <View style={styles.infoColumn}>
-                                <Text style={styles.label}>Company Name</Text>
-                                <Text style={styles.valueLarge} numberOfLines={1}>
-                                    {profileData?.companyName || 'Unknown Company'}
-                                </Text>
-                            </View>
-
-                            <View style={styles.verticalLine} />
-
-                            <View style={styles.infoColumn}>
-                                <Text style={styles.label}>Phone</Text>
-                                <Text style={styles.valueLarge} numberOfLines={1}>
-                                    {profileData?.phoneNumber || 'N/A'}
-                                </Text>
-                            </View>
+                        
+                        {/* Action Bar - Share Only for Partner */}
+                        <View style={styles.actionRow}>
+                            <TouchableOpacity onPress={handleShare} style={styles.circleAction}>
+                                <Ionicons name="share-social-outline" size={sizeScale(20)} color="#fff" />
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
 
-                {/* --- 3. Details Section --- */}
-                <View style={styles.detailsContainer}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Company Details</Text>
-                    </View>
+                {/* --- BUSINESS CARD --- */}
+                <View style={styles.cardContainer}>
+                    <LinearGradient
+                        colors={[COLORS.cardBorder, 'transparent']}
+                        style={styles.cardBorderGradient}
+                    >
+                        <View style={styles.cardInner}>
+                            <View style={styles.namesRow}>
+                                <View style={styles.nameCol}>
+                                    <Text style={styles.labelSmall}>Company Name</Text>
+                                    <Text style={styles.nameText}>{profileData?.companyName || '---'}</Text>
+                                </View>
+                                <View style={styles.verticalDivider} />
+                                <View style={styles.nameCol}>
+                                    <Text style={styles.labelSmall}>User Name</Text>
+                                    <Text style={styles.nameText}>{profileData?.userName || '---'}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </View>
 
-                    <View style={styles.detailRow}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>GST Number</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{profileData?.gstNumber || 'Not Provided'}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>Category</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue}>{profileData?.category || 'General'}</Text>
-                        </View>
-                    </View>
-
+                {/* --- DETAILS LIST --- */}
+                <View style={styles.detailsList}>
+                    <DetailItem label="GST Number" value={profileData?.gstNumber} />
+                    <DetailItem label="Category" value={profileData?.category} />
                     {profileData?.description && (
-                        <View style={styles.detailRow}>
-                            <View style={styles.detailLabelCol}>
-                                <Text style={styles.detailLabel}>About</Text>
-                            </View>
-                            <View style={styles.detailValueCol}>
-                                <Text style={styles.detailValue}>{profileData.description}</Text>
-                            </View>
-                        </View>
+                        <DetailItem label="About" value={profileData?.description} />
                     )}
-
-                    <View style={[styles.detailRow, { borderTopWidth: 1, borderTopColor: COLORS.cardBorder }]}>
-                        <View style={styles.detailLabelCol}>
-                            <Text style={styles.detailLabel}>Address</Text>
-                        </View>
-                        <View style={styles.detailValueCol}>
-                            <Text style={styles.detailValue} numberOfLines={3}>
-                                {profileData?.address || 'No address provided'}
-                            </Text>
-                        </View>
-                    </View>
+                    <DetailItem label="Address" value={profileData?.address} isLast />
                 </View>
 
-                {/* Spacer */}
                 <View style={{ height: sizeScale(40) }} />
             </ScrollView>
         </View>
     );
 }
 
+// Helper Component
+const DetailItem = ({ label, value, isLast }: any) => (
+    <>
+        <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>{label}</Text>
+            <Text style={styles.detailValue} numberOfLines={3}>{value || 'Not provided'}</Text>
+        </View>
+        {!isLast && <View style={styles.detailDivider} />}
+    </>
+);
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.bg,
-    },
-    loadingContainer: {
-        flex: 1,
-        backgroundColor: COLORS.bg,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContent: {
-        paddingBottom: sizeScale(40),
-    },
-    // --- Cover Section ---
-    coverSection: {
-        height: sizeScale(150),
-        width: '100%',
-        position: 'relative',
-        zIndex: 0,
-    },
-    coverImage: {
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#1a1a1a',
-    },
-    backButton: {
+    container: { flex: 1, backgroundColor: COLORS.bg },
+    loadingContainer: { flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center' },
+    scrollView: { flex: 1 },
+    scrollContent: { paddingBottom: sizeScale(20) },
+    
+    // Header
+    headerContainer: { width: '100%', height: sizeScale(280), position: 'relative' },
+    horizonWrapper: { width: '100%', height: sizeScale(200), position: 'absolute', top: 0 },
+    coverImage: { width: '100%', height: '100%' },
+    
+    navbar: {
         position: 'absolute',
-        top: sizeScale(50),
+        top: Platform.OS === 'ios' ? sizeScale(50) : sizeScale(30),
         left: sizeScale(16),
-        width: sizeScale(40),
-        height: sizeScale(40),
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.3)', 
+        zIndex: 50,
+    },
+    navButton: {
+        backgroundColor: 'rgba(0,0,0,0.3)',
         borderRadius: sizeScale(20),
+        padding: 4,
+    },
+
+    // Avatar & Actions
+    avatarSection: {
+        position: 'absolute',
+        bottom: 0,
+        width: '100%',
+        alignItems: 'center',
         zIndex: 20,
     },
-    // --- Depth Frame ---
-    depthFrame: {
-        marginTop: sizeScale(-75),
-        paddingHorizontal: sizeScale(16),
-        width: '100%',
-        zIndex: 1,
-        position: 'relative',
-    },
-    cardBackground: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: sizeScale(8),
-        paddingTop: sizeScale(18),
-        paddingBottom: sizeScale(16),
-        alignItems: 'center',
-        position: 'relative',
-        borderWidth: 1,
-        borderColor: '#1F2937',
-    },
-    iconShare: {
-        position: 'absolute',
-        top: sizeScale(16),
-        right: sizeScale(16),
-        zIndex: 10,
-    },
-    avatarContainer: {
-        width: sizeScale(100),
-        height: sizeScale(100),
-        borderRadius: sizeScale(50),
-        borderWidth: 4,
-        borderColor: '#000',
-        overflow: 'hidden',
-        marginBottom: sizeScale(8),
-        backgroundColor: '#1a1a1a', 
-    },
-    avatar: {
-        width: '100%',
-        height: '100%',
-        borderRadius: sizeScale(50),
-    },
-    // --- Glass Info Box ---
-    glassInfoBox: {
-        width: '92%',
-        backgroundColor: COLORS.glassBg,
-        borderRadius: sizeScale(10),
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        flexDirection: 'row',
-        padding: sizeScale(12),
-    },
-    infoColumn: {
-        flex: 1,
-        paddingHorizontal: sizeScale(4),
-        alignItems: 'center',
-    },
-    verticalLine: {
-        width: 1,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        height: '80%',
-        alignSelf: 'center',
-    },
-    label: {
-        color: COLORS.iconColor,
-        fontSize: sizeScale(12),
-        marginBottom: sizeScale(2),
-    },
-    valueLarge: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(16),
-        fontWeight: '600',
-    },
-    // --- Details ---
-    detailsContainer: {
-        marginTop: sizeScale(24),
-        marginHorizontal: sizeScale(16),
+    avatarWrapper: {
+        width: sizeScale(110),
+        height: sizeScale(110),
+        borderRadius: sizeScale(55),
+        borderWidth: 3,
+        borderColor: COLORS.cyan,
         backgroundColor: '#000',
-        paddingVertical: sizeScale(8),
+        padding: 2,
+        shadowColor: COLORS.cyan,
+        shadowOpacity: 0.6,
+        shadowRadius: 15,
+        elevation: 12,
     },
-    sectionHeader: {
-        marginBottom: sizeScale(16),
-        borderBottomWidth: 1,
-        borderBottomColor: '#1F2937',
-        paddingBottom: sizeScale(8),
-    },
-    sectionTitle: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(16),
-        fontWeight: '600',
-    },
-    detailRow: {
+    avatar: { width: '100%', height: '100%', borderRadius: sizeScale(55) },
+    
+    actionRow: {
         flexDirection: 'row',
-        borderTopWidth: 1,
-        borderTopColor: COLORS.cardBorder,
-        paddingVertical: sizeScale(14),
-        alignItems: 'flex-start',
+        marginTop: sizeScale(15),
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        padding: sizeScale(6),
+        borderRadius: sizeScale(30),
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
     },
-    detailLabelCol: {
-        width: sizeScale(100),
+    circleAction: {
+        width: sizeScale(40),
+        height: sizeScale(40),
+        borderRadius: sizeScale(20),
+        backgroundColor: '#1A1A1A',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333',
     },
-    detailValueCol: {
-        flex: 1,
-        alignItems: 'flex-end',
+
+    // Card
+    cardContainer: { marginTop: sizeScale(20), marginHorizontal: sizeScale(16) },
+    cardBorderGradient: { borderRadius: sizeScale(16), padding: 1 },
+    cardInner: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: sizeScale(15),
+        padding: sizeScale(20),
     },
-    detailLabel: {
-        color: COLORS.iconColor,
-        fontSize: sizeScale(14),
-        fontWeight: '400',
-    },
-    detailValue: {
-        color: COLORS.textWhite,
-        fontSize: sizeScale(14),
-        fontWeight: '400',
-        textAlign: 'right',
-        lineHeight: sizeScale(20),
-    },
+    namesRow: { flexDirection: 'row' },
+    nameCol: { flex: 1, paddingHorizontal: sizeScale(10) },
+    verticalDivider: { width: 1, backgroundColor: '#222', height: '100%' },
+    labelSmall: { color: '#666', fontSize: sizeScale(11), marginBottom: 4, textTransform: 'uppercase' },
+    nameText: { color: '#fff', fontSize: sizeScale(16), fontWeight: '700' },
+    
+    // Details
+    detailsList: { marginTop: sizeScale(30), paddingHorizontal: sizeScale(24) },
+    detailItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: sizeScale(16) },
+    detailLabel: { color: '#888', fontSize: sizeScale(14), flex: 0.3 },
+    detailValue: { color: '#fff', fontSize: sizeScale(14), fontWeight: '600', textAlign: 'right', flex: 0.7 },
+    detailDivider: { height: 1, backgroundColor: '#111' },
 });

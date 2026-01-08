@@ -766,3 +766,4 @@ const styles = StyleSheet.create({
   todaySeparator: { alignItems: 'center', marginVertical: 10 },
   todayText: { color: '#6B7280', fontSize: 12, fontWeight: '600', backgroundColor: '#1F2937', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }
 });
+

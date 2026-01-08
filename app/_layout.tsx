@@ -1,6 +1,6 @@
 // app/_layout.tsx
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Linking } from 'react-native';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { NotificationProvider } from '../context/NotificationContext';
@@ -9,6 +9,7 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const { isAuthenticated, isLoading } = useAuth();
+  const navigationAttempted = useRef(false);
 
   // Handle deep links
   useEffect(() => {
@@ -47,24 +48,48 @@ function RootLayoutNav() {
     };
   }, [isAuthenticated, isLoading]);
 
-  // Auth-based navigation
+  // Auth-based navigation with gesture support
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading) {
+      navigationAttempted.current = false;
+      return;
+    }
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inAppGroup = segments[0] === '(app)';
+    const isIndexRoute = segments.length === 0 || segments[0] === 'index';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // Not logged in, redirect to auth
-      if (segments[0] !== '(auth)') {
+    // Prevent navigation loops by checking if we've already attempted navigation
+    if (navigationAttempted.current && !isIndexRoute) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      // User is not authenticated
+      if (inAppGroup) {
+        // Only redirect if in app group, allow gesture back to auth
         console.log('Redirecting to phone-entry screen after logout');
+        navigationAttempted.current = true;
+        router.replace('/(auth)/phone-entry');
+      } else if (isIndexRoute) {
+        // Handle index route
+        navigationAttempted.current = true;
         router.replace('/(auth)/phone-entry');
       }
-    } else if (isAuthenticated && inAuthGroup) {
-      // Logged in but in auth flow, redirect to app
-      if (segments[0] !== '(app)') {
+      // If already in auth group, do nothing (allow free navigation within auth)
+    } else {
+      // User is authenticated
+      if (inAuthGroup) {
+        // Only redirect if in auth group, allow gesture navigation in app
         console.log('Redirecting to dashboard after login');
+        navigationAttempted.current = true;
+        router.replace('/(app)/dashboard');
+      } else if (isIndexRoute) {
+        // Handle index route
+        navigationAttempted.current = true;
         router.replace('/(app)/dashboard');
       }
+      // If already in app group, do nothing (allow free navigation within app)
     }
   }, [isAuthenticated, isLoading, segments]);
 
@@ -72,12 +97,30 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerShown: false,
+        gestureEnabled: true, // Enable gestures
+        animation: 'default', // Use default animation for gestures
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(app)" />
-      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      <Stack.Screen 
+        name="(auth)" 
+        options={{
+          gestureEnabled: false, // Disable gesture back from auth
+        }}
+      />
+      <Stack.Screen 
+        name="(app)" 
+        options={{
+          gestureEnabled: true, // Enable gestures in app
+        }}
+      />
+      <Stack.Screen 
+        name="modal" 
+        options={{ 
+          presentation: 'modal',
+          gestureEnabled: true,
+        }} 
+      />
     </Stack>
   );
 }

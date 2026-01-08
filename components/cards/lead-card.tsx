@@ -1,8 +1,7 @@
-
 // // components/cards/lead-card.tsx
 // import { useRouter } from 'expo-router';
-// import { MessageCircle, Share2, X } from 'lucide-react-native';
-// import React, { useState } from 'react';
+// import { MessageCircle, Share2, X, Gift } from 'lucide-react-native';
+// import React, { useState, useEffect } from 'react';
 // import {
 //     ActivityIndicator,
 //     Alert,
@@ -19,12 +18,14 @@
 // import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 // import { chatAPI } from '../../services/chat-websocket';
 // import { Lead, leadsAPI } from '../../services/leads';
+// import { companyAPI } from '../../services/user';
 
 // const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // interface LeadCardProps {
 //   lead: Lead;
 //   onConsumeSuccess?: () => void;
+//   remainingLeads?: number; // Pass from parent to avoid refetching
 // }
 
 // // Gradient Icon Components
@@ -97,7 +98,6 @@
 //   if (diffDays === 1) return 'Yesterday';
 //   if (diffDays < 7) return `${diffDays}d ago`;
   
-//   // For older dates, show formatted date
 //   const options: Intl.DateTimeFormatOptions = { 
 //     month: 'short', 
 //     day: 'numeric',
@@ -106,17 +106,37 @@
 //   return past.toLocaleDateString('en-US', options);
 // };
 
-// export const LeadCard = ({ lead, onConsumeSuccess }: LeadCardProps) => {
+// export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemainingLeads }: LeadCardProps) => {
 //   const router = useRouter();
 //   const [expanded, setExpanded] = useState(false);
 //   const [imageZoomed, setImageZoomed] = useState(false);
 //   const [showConsumeModal, setShowConsumeModal] = useState(false);
+//   const [showReferralModal, setShowReferralModal] = useState(false);
 //   const [isConsuming, setIsConsuming] = useState(false);
+//   const [remainingLeads, setRemainingLeads] = useState<number | null>(propRemainingLeads ?? null);
+//   const [referralCode, setReferralCode] = useState<string>('');
   
 //   const { width: screenWidth } = useWindowDimensions();
-  
-//   // Calculate responsive dimensions
 //   const cardWidth = Math.min(screenWidth - 32, 400);
+
+//   // Fetch remaining leads if not provided
+//   useEffect(() => {
+//     if (propRemainingLeads === undefined) {
+//       fetchQuota();
+//     }
+//   }, [propRemainingLeads]);
+
+//   const fetchQuota = async () => {
+//     try {
+//       const quotaResponse = await companyAPI.getLeadQuota();
+//       if (quotaResponse.status === 'success') {
+//         setRemainingLeads(quotaResponse.data.remainingLeads);
+//         setReferralCode(quotaResponse.data.referralCode);
+//       }
+//     } catch (error) {
+//       console.error('Error fetching quota:', error);
+//     }
+//   };
 
 //   // --- Generate Deep Link ---
 //   const generateLeadLink = () => {
@@ -146,7 +166,14 @@
 
 //   // --- Chat/Consume Logic ---
 //   const handleChatPress = () => {
-//     setShowConsumeModal(true);
+//     // Check if user has remaining leads
+//     if (remainingLeads !== null && remainingLeads <= 0) {
+//       // Show referral modal instead of consume modal
+//       setShowReferralModal(true);
+//     } else {
+//       // Show consume confirmation modal
+//       setShowConsumeModal(true);
+//     }
 //   };
 
 //   const confirmConsumption = async () => {
@@ -157,6 +184,15 @@
 
 //       if (consumeResponse.status === 'success') {
         
+//         // Check if consumption was actually successful
+//         if (consumeResponse.data?.message === 'Insufficient leads to consume') {
+//           // User ran out of leads
+//           setIsConsuming(false);
+//           setShowConsumeModal(false);
+//           setShowReferralModal(true);
+//           return;
+//         }
+
 //         if (onConsumeSuccess) {
 //           onConsumeSuccess();
 //         }
@@ -184,8 +220,32 @@
 //     } catch (error: any) {
 //       setIsConsuming(false);
 //       setShowConsumeModal(false);
+      
 //       const msg = error.message || 'Failed to consume lead. Please check your quota.';
-//       Alert.alert('Error', msg);
+      
+//       // If error message indicates insufficient leads, show referral modal
+//       if (msg.toLowerCase().includes('insufficient') || msg.toLowerCase().includes('quota')) {
+//         setShowReferralModal(true);
+//       } else {
+//         Alert.alert('Error', msg);
+//       }
+//     }
+//   };
+
+//   const handleCopyLink = async () => {
+//     if (referralCode) {
+//       const link = `https://bizzap.app/signup?ref=${referralCode}`;
+//       await Clipboard.setStringAsync(link);
+//       Alert.alert('Success', 'Referral link copied to clipboard!');
+//     }
+//   };
+
+//   const handleShareLink = async () => {
+//     if (referralCode) {
+//       const link = `https://bizzap.app/signup?ref=${referralCode}`;
+//       await Share.share({ 
+//         message: `Join Bizzap and get bonus leads! Code: ${referralCode}\n${link}` 
+//       });
 //     }
 //   };
 
@@ -259,7 +319,9 @@
 //             onPress={handleChatPress}
 //             activeOpacity={0.8}
 //           >
-//             <Text style={styles.chatText}>Chat with Buyer</Text>
+//             <Text style={styles.chatText}>
+//               {remainingLeads !== null && remainingLeads <= 0 ? 'Get More Leads' : 'Chat with Buyer'}
+//             </Text>
 //           </TouchableOpacity>
 //         </View>
 //       </View>
@@ -330,6 +392,51 @@
 //                     </TouchableOpacity>
 //                 </View>
 //             </View>
+//         </View>
+//       </Modal>
+
+//       {/* Referral Modal (No Leads Left) */}
+//       <Modal
+//         visible={showReferralModal}
+//         transparent={true}
+//         animationType="slide"
+//         onRequestClose={() => setShowReferralModal(false)}
+//       >
+//         <View style={styles.modalOverlay}>
+//           <View style={styles.referralCard}>
+//             <TouchableOpacity 
+//               style={styles.closeButton2} 
+//               onPress={() => setShowReferralModal(false)}
+//             >
+//               <X size={24} color="#94A3B8" />
+//             </TouchableOpacity>
+            
+//             <View style={styles.giftIconCircle}>
+//               <Gift size={40} color="#0057D9" />
+//             </View>
+            
+//             <Text style={styles.modalTitle}>Out of Lead Credits!</Text>
+            
+//             <Text style={styles.modalDesc}>
+//               You've used all your leads for this month. Invite friends to join Bizzap and earn <Text style={styles.highlightText}>3 bonus leads</Text> per successful referral!
+//             </Text>
+            
+//             {referralCode && (
+//               <View style={styles.codeContainer}>
+//                 <Text style={styles.codeLabel}>Your Referral Code</Text>
+//                 <Text style={styles.codeValue}>{referralCode}</Text>
+//               </View>
+//             )}
+            
+//             <View style={styles.modalActions}>
+//               <TouchableOpacity style={styles.btnCopy} onPress={handleCopyLink}>
+//                 <Text style={styles.btnCopyText}>Copy Link</Text>
+//               </TouchableOpacity>
+//               <TouchableOpacity style={styles.btnShare} onPress={handleShareLink}>
+//                 <Text style={styles.btnShareText}>Share</Text>
+//               </TouchableOpacity>
+//             </View>
+//           </View>
 //         </View>
 //       </Modal>
 //     </>
@@ -478,6 +585,12 @@
 //     backgroundColor: 'rgba(0, 0, 0, 0.5)',
 //     borderRadius: 24,
 //   },
+//   closeButton2: {
+//     position: 'absolute',
+//     top: 12,
+//     right: 12,
+//     padding: 8,
+//   },
 //   zoomedImage: {
 //     width: '100%',
 //     height: SCREEN_HEIGHT * 0.8,
@@ -556,6 +669,91 @@
 //     color: '#FFF',
 //     fontWeight: '600',
 //   },
+//   // Referral Modal Styles
+//   referralCard: {
+//     width: '100%',
+//     maxWidth: 340,
+//     backgroundColor: '#1E293B',
+//     borderRadius: 16,
+//     padding: 24,
+//     alignItems: 'center',
+//     borderWidth: 1,
+//     borderColor: '#30363D',
+//   },
+//   giftIconCircle: {
+//     width: 80,
+//     height: 80,
+//     borderRadius: 40,
+//     backgroundColor: 'rgba(0, 87, 217, 0.1)',
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     marginBottom: 16,
+//   },
+//   modalTitle: {
+//     fontSize: 22,
+//     fontWeight: '700',
+//     color: '#FFF',
+//     marginBottom: 12,
+//     fontFamily: 'Outfit',
+//   },
+//   modalDesc: {
+//     fontSize: 14,
+//     color: '#94A3B8',
+//     textAlign: 'center',
+//     lineHeight: 22,
+//     marginBottom: 24,
+//   },
+//   codeContainer: {
+//     width: '100%',
+//     backgroundColor: '#0F1417',
+//     borderRadius: 8,
+//     padding: 16,
+//     alignItems: 'center',
+//     marginBottom: 24,
+//     borderWidth: 1,
+//     borderColor: '#495565',
+//   },
+//   codeLabel: {
+//     fontSize: 12,
+//     color: '#8B949E',
+//     marginBottom: 8,
+//   },
+//   codeValue: {
+//     fontSize: 24,
+//     fontWeight: '700',
+//     color: '#00D1B2',
+//     letterSpacing: 2,
+//   },
+//   modalActions: {
+//     flexDirection: 'row',
+//     width: '100%',
+//     gap: 12,
+//   },
+//   btnCopy: {
+//     flex: 1,
+//     height: 44,
+//     borderRadius: 8,
+//     borderWidth: 1,
+//     borderColor: '#0057D9',
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//   },
+//   btnCopyText: {
+//     color: '#0057D9',
+//     fontWeight: '600',
+//   },
+//   btnShare: {
+//     flex: 1,
+//     height: 44,
+//     borderRadius: 8,
+//     backgroundColor: '#0057D9',
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//   },
+//   btnShareText: {
+//     color: '#FFF',
+//     fontWeight: '600',
+//   },
 // });
 
 
@@ -578,6 +776,7 @@ import {
     View
 } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import * as Clipboard from 'expo-clipboard'; // Ensure Clipboard is imported if used
 import { chatAPI } from '../../services/chat-websocket';
 import { Lead, leadsAPI } from '../../services/leads';
 import { companyAPI } from '../../services/user';
@@ -685,6 +884,8 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
   useEffect(() => {
     if (propRemainingLeads === undefined) {
       fetchQuota();
+    } else {
+      setRemainingLeads(propRemainingLeads);
     }
   }, [propRemainingLeads]);
 
@@ -700,16 +901,13 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
     }
   };
 
-  // --- Generate Deep Link ---
   const generateLeadLink = () => {
     return `https://bizzap.app/dashboard?leadId=${lead.id}`;
   };
 
-  // --- Share Handler ---
   const handleShare = async () => {
     try {
       const leadLink = generateLeadLink();
-      
       const message = `🔥 Check out this lead on Bizzap!\n\n` +
         `${lead.title}\n` +
         `📍 ${lead.location || 'Location not specified'}\n` +
@@ -726,14 +924,13 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
     }
   };
 
-  // --- Chat/Consume Logic ---
+  // --- Logic Update: Handling Interactions based on Quota ---
   const handleChatPress = () => {
-    // Check if user has remaining leads
+    // If we definitely know user has 0 leads, open referral immediately
     if (remainingLeads !== null && remainingLeads <= 0) {
-      // Show referral modal instead of consume modal
       setShowReferralModal(true);
     } else {
-      // Show consume confirmation modal
+      // Otherwise ask for confirmation (API will double check)
       setShowConsumeModal(true);
     }
   };
@@ -744,21 +941,27 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
 
       const consumeResponse = await leadsAPI.consumeLead(lead.id);
 
-      if (consumeResponse.status === 'success') {
-        
-        // Check if consumption was actually successful
-        if (consumeResponse.data?.message === 'Insufficient leads to consume') {
-          // User ran out of leads
+      // Check if API says successful but message indicates insufficient leads
+      if (
+          consumeResponse.message === 'Insufficient leads to consume' || 
+          consumeResponse.data?.message === 'Insufficient leads to consume'
+      ) {
+          // STOP PROCESS: Do not chat, do not navigate.
           setIsConsuming(false);
           setShowConsumeModal(false);
+          // Show the referral modal to get more leads
           setShowReferralModal(true);
-          return;
-        }
+          return; 
+      }
 
+      // If genuine success
+      if (consumeResponse.status === 'success') {
+        
         if (onConsumeSuccess) {
           onConsumeSuccess();
         }
 
+        // Only send message if consumption was truly successful
         const starterMessage = `Hello, I saw your lead "${lead.title}" in ${lead.location || 'your area'} and would like to discuss the requirements.`;
         
         try {
@@ -783,9 +986,9 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
       setIsConsuming(false);
       setShowConsumeModal(false);
       
-      const msg = error.message || 'Failed to consume lead. Please check your quota.';
+      const msg = error.message || 'Failed to consume lead.';
       
-      // If error message indicates insufficient leads, show referral modal
+      // Fallback check if error text suggests quota limits
       if (msg.toLowerCase().includes('insufficient') || msg.toLowerCase().includes('quota')) {
         setShowReferralModal(true);
       } else {
@@ -881,9 +1084,8 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
             onPress={handleChatPress}
             activeOpacity={0.8}
           >
-            <Text style={styles.chatText}>
-              {remainingLeads !== null && remainingLeads <= 0 ? 'Get More Leads' : 'Chat with Buyer'}
-            </Text>
+            {/* UI Fix: Always show "Chat with Buyer" even if out of leads */}
+            <Text style={styles.chatText}>Chat with Buyer</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -983,12 +1185,12 @@ export const LeadCard = ({ lead, onConsumeSuccess, remainingLeads: propRemaining
               You've used all your leads for this month. Invite friends to join Bizzap and earn <Text style={styles.highlightText}>3 bonus leads</Text> per successful referral!
             </Text>
             
-            {referralCode && (
+            {referralCode ? (
               <View style={styles.codeContainer}>
                 <Text style={styles.codeLabel}>Your Referral Code</Text>
                 <Text style={styles.codeValue}>{referralCode}</Text>
               </View>
-            )}
+            ) : null}
             
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.btnCopy} onPress={handleCopyLink}>

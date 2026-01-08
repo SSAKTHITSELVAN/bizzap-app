@@ -1,29 +1,38 @@
-// ==========================================
-// FILE 1: app/index.tsx
-// ==========================================
+// app/index.tsx
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 
 export default function Index() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
+  const navigationState = useRootNavigationState();
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
-    if (isLoading) return; // Wait for auth check to complete
-
-    if (isAuthenticated) {
-      // User is authenticated, go to dashboard (inside app tabs)
-      router.replace('/(app)/dashboard');
-    } else {
-      // User is not authenticated, go to phone entry
-      router.replace('/(auth)/phone-entry');
+    // Wait for navigation to be ready and auth check to complete
+    if (!navigationState?.key || isLoading || hasNavigated.current) {
+      return;
     }
-  }, [isAuthenticated, isLoading]);
 
-  // Show loading while checking auth
+    // Mark as navigated to prevent multiple navigation attempts
+    hasNavigated.current = true;
+
+    // Small delay to ensure navigation state is stable
+    const timeoutId = setTimeout(() => {
+      if (isAuthenticated) {
+        router.replace('/(app)/dashboard');
+      } else {
+        router.replace('/(auth)/phone-entry');
+      }
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [isAuthenticated, isLoading, navigationState?.key]);
+
+  // Show loading while checking auth or waiting for navigation
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color="#4C1D95" />
