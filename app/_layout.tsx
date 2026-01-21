@@ -2,6 +2,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useMemo, useRef } from 'react';
 import { Linking } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { NotificationProvider } from '../context/NotificationContext';
 
@@ -11,23 +12,59 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const navigationAttempted = useRef(false);
 
-  // Handle deep links
+  // Enhanced deep link handling
   useEffect(() => {
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
       console.log('Deep link received:', url);
       
-      const leadMatch = url.match(/[?&]leadId=([a-zA-Z0-9-]+)/);
-      
-      if (leadMatch && leadMatch[1]) {
-        const leadId = leadMatch[1];
+      try {
+        // Parse the URL to extract parameters
+        const urlObj = new URL(url);
+        
+        // Handle different URL patterns
+        // 1. https://bizzap.app/dashboard?leadId=xxx
+        // 2. https://bizzap.app?leadId=xxx
+        // 3. bizzap://dashboard?leadId=xxx
+        
+        const leadId = urlObj.searchParams.get('leadId');
+        const pathname = urlObj.pathname;
         
         if (!isLoading) {
+          if (leadId) {
+            // Lead-specific deep link
+            if (isAuthenticated) {
+              router.push({
+                pathname: '/(app)/dashboard',
+                params: { leadId }
+              });
+            } else {
+              // Store the deep link for after authentication
+              await AsyncStorage.setItem('pendingDeepLink', JSON.stringify({ leadId }));
+              router.push('/(auth)/phone-entry');
+            }
+          } else if (pathname.includes('/dashboard')) {
+            // General dashboard link
+            if (isAuthenticated) {
+              router.push('/(app)/dashboard');
+            } else {
+              router.push('/(auth)/phone-entry');
+            }
+          } else {
+            // Root link - go to appropriate home screen
+            if (isAuthenticated) {
+              router.push('/(app)/dashboard');
+            } else {
+              router.push('/(auth)/phone-entry');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing deep link:', error);
+        // Fallback: just navigate to appropriate home screen
+        if (!isLoading) {
           if (isAuthenticated) {
-            router.push({
-              pathname: '/(app)/dashboard',
-              params: { leadId }
-            });
+            router.push('/(app)/dashboard');
           } else {
             router.push('/(auth)/phone-entry');
           }
@@ -35,17 +72,47 @@ function RootLayoutNav() {
       }
     };
 
+    // Handle initial URL when app is opened from a link
     Linking.getInitialURL().then((url) => {
       if (url) {
+        console.log('Initial URL:', url);
         handleDeepLink({ url });
       }
     });
 
+    // Handle URLs when app is already open
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
       subscription.remove();
     };
+  }, [isAuthenticated, isLoading]);
+
+  // Check for pending deep links after authentication
+  useEffect(() => {
+    const checkPendingDeepLink = async () => {
+      if (isAuthenticated && !isLoading) {
+        try {
+          const pendingLink = await AsyncStorage.getItem('pendingDeepLink');
+          if (pendingLink) {
+            const { leadId } = JSON.parse(pendingLink);
+            await AsyncStorage.removeItem('pendingDeepLink');
+            
+            // Small delay to ensure navigation is ready
+            setTimeout(() => {
+              router.push({
+                pathname: '/(app)/dashboard',
+                params: { leadId }
+              });
+            }, 500);
+          }
+        } catch (error) {
+          console.error('Error checking pending deep link:', error);
+        }
+      }
+    };
+
+    checkPendingDeepLink();
   }, [isAuthenticated, isLoading]);
 
   // Auth-based navigation with gesture support
@@ -59,37 +126,28 @@ function RootLayoutNav() {
     const inAppGroup = segments[0] === '(app)';
     const isIndexRoute = segments.length === 0 || segments[0] === 'index';
 
-    // Prevent navigation loops by checking if we've already attempted navigation
     if (navigationAttempted.current && !isIndexRoute) {
       return;
     }
 
     if (!isAuthenticated) {
-      // User is not authenticated
       if (inAppGroup) {
-        // Only redirect if in app group, allow gesture back to auth
         console.log('Redirecting to phone-entry screen after logout');
         navigationAttempted.current = true;
         router.replace('/(auth)/phone-entry');
       } else if (isIndexRoute) {
-        // Handle index route
         navigationAttempted.current = true;
         router.replace('/(auth)/phone-entry');
       }
-      // If already in auth group, do nothing (allow free navigation within auth)
     } else {
-      // User is authenticated
       if (inAuthGroup) {
-        // Only redirect if in auth group, allow gesture navigation in app
         console.log('Redirecting to dashboard after login');
         navigationAttempted.current = true;
         router.replace('/(app)/dashboard');
       } else if (isIndexRoute) {
-        // Handle index route
         navigationAttempted.current = true;
         router.replace('/(app)/dashboard');
       }
-      // If already in app group, do nothing (allow free navigation within app)
     }
   }, [isAuthenticated, isLoading, segments]);
 
@@ -97,21 +155,21 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerShown: false,
-        gestureEnabled: true, // Enable gestures
-        animation: 'default', // Use default animation for gestures
+        gestureEnabled: true,
+        animation: 'default',
       }}
     >
       <Stack.Screen name="index" />
       <Stack.Screen 
         name="(auth)" 
         options={{
-          gestureEnabled: false, // Disable gesture back from auth
+          gestureEnabled: false,
         }}
       />
       <Stack.Screen 
         name="(app)" 
         options={{
-          gestureEnabled: true, // Enable gestures in app
+          gestureEnabled: true,
         }}
       />
       <Stack.Screen 
@@ -125,11 +183,9 @@ function RootLayoutNav() {
   );
 }
 
-// Wrapper component that uses useAuth and conditionally renders NotificationProvider
 function AuthenticatedRoot() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Only create NotificationProvider once when authenticated, don't remount it
   const notificationProvider = useMemo(() => {
     if (isLoading) {
       return <RootLayoutNav />;

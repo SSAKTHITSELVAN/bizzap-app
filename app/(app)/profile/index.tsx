@@ -200,7 +200,7 @@ export default function ProfileScreen() {
                         }
                         title="About Bizzap"
                         subtitle="Terms, policies and app versions"
-                        onPress={() => handleExternalLink('https://bizzap.app/about')}
+                        onPress={() => handleExternalLink('https://bizzap.app')}
                     />
 
                     <InfoBlock

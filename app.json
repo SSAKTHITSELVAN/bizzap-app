@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Bizzap",
-    "slug": "Bizzap",
+    "slug": "bizzap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,10 +10,10 @@
     "newArchEnabled": true,
     "notification": {
       "icon": "./assets/images/notification-icon.png",
-      "color": "#007AFF",
+      "color": "#01BE8B",
       "iosDisplayInForeground": true,
       "androidMode": "default",
-      "androidCollapsedTitle": "New notification"
+      "androidCollapsedTitle": "{{unread_count}} new notifications"
     },
     "ios": {
       "supportsTablet": true,
@@ -39,8 +39,10 @@
       "permissions": [
         "NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
       ],
+      "useNextNotificationsApi": true,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -49,12 +51,24 @@
             {
               "scheme": "https",
               "host": "bizzap.app",
-              "pathPrefix": "/dashboard"
+              "pathPrefix": "/"
             },
             {
               "scheme": "https",
               "host": "www.bizzap.app",
-              "pathPrefix": "/dashboard"
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "bizzap"
             }
           ],
           "category": [
@@ -74,7 +88,10 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#007AFF"
+          "color": "#01BE8B",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "New notification from Bizzap"
         }
       ],
       [
@@ -106,7 +123,10 @@
             ]
           },
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 23
           }
         }
       ]
