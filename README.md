@@ -41,8 +41,10 @@
 ============================
 
 git add .
-   git commit -m "Remove native code to use Prebuild"
-   eas build --platform android --profile preview
+git commit -m "Remove native code to use Prebuild"
+eas build --platform android --profile preview
+
+eas build --platform android --profile production
 
 =============================
 
